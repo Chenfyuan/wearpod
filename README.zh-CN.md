@@ -1,5 +1,9 @@
 # WearPod
 
+[![Release](https://img.shields.io/github/v/release/Chenfyuan/wearpod?display_name=tag)](https://github.com/Chenfyuan/wearpod/releases)
+[![Android](https://github.com/Chenfyuan/wearpod/actions/workflows/android.yml/badge.svg)](https://github.com/Chenfyuan/wearpod/actions/workflows/android.yml)
+[![License](https://img.shields.io/github/license/Chenfyuan/wearpod)](./LICENSE)
+
 [English README](./README.md)
 
 > 一个由 SJTech 打造的独立 Wear OS 手表播客播放器。
@@ -116,6 +120,14 @@ WearPod 的定位是 `watch-first` 播客客户端，而不是播客平台。
 gradle assembleDebug --no-daemon
 gradle testDebugUnitTest --no-daemon
 ```
+
+### GitHub Actions release 构建
+
+仓库已经包含一个 Android workflow，用来生成未签名的 release APK：
+
+- 在 `push`、`pull_request`、`workflow_dispatch` 和 GitHub `release` 时运行
+- 将 `app-release-unsigned.apk` 上传为 workflow artifact
+- 在发布 GitHub Release 时，把同一个未签名 APK 挂到 release 页面
 
 ### 2. 安装到 Wear OS 模拟器或设备
 

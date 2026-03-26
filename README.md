@@ -1,5 +1,9 @@
 # WearPod
 
+[![Release](https://img.shields.io/github/v/release/Chenfyuan/wearpod?display_name=tag)](https://github.com/Chenfyuan/wearpod/releases)
+[![Android](https://github.com/Chenfyuan/wearpod/actions/workflows/android.yml/badge.svg)](https://github.com/Chenfyuan/wearpod/actions/workflows/android.yml)
+[![License](https://img.shields.io/github/license/Chenfyuan/wearpod)](./LICENSE)
+
 [中文文档](./README.zh-CN.md)
 
 > A standalone, watch-first podcast player for Wear OS by SJTech.
@@ -115,6 +119,14 @@ If wrapper downloads are blocked, use the system Gradle binary instead:
 gradle assembleDebug --no-daemon
 gradle testDebugUnitTest --no-daemon
 ```
+
+### GitHub Actions release build
+
+The repository includes an Android workflow that builds an unsigned release APK:
+
+- runs on `push`, `pull_request`, `workflow_dispatch`, and GitHub `release`
+- uploads `app-release-unsigned.apk` as a workflow artifact
+- attaches the same unsigned APK to the GitHub Release page when a release is published
 
 ### 2. Install on a Wear OS emulator or device
 
