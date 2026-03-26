@@ -1,0 +1,52 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="140" y1="40" x2="1080" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B1219"/>
+      <stop offset="0.5" stop-color="#0F0C13"/>
+      <stop offset="1" stop-color="#050507"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(915 190) rotate(128.476) scale(385.327 425.953)">
+      <stop stop-color="#FF7B5B" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FF7B5B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="758" y1="170" x2="1016" y2="428" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2C1D24"/>
+      <stop offset="1" stop-color="#141119"/>
+    </linearGradient>
+    <radialGradient id="play" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(816 312) rotate(46.6366) scale(126.49)">
+      <stop stop-color="#FF9B84"/>
+      <stop offset="1" stop-color="#FF7B5B"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
+  <rect width="1200" height="630" rx="36" fill="url(#glow)"/>
+
+  <circle cx="872" cy="315" r="238" fill="#0A090D" stroke="#24202A" stroke-width="8"/>
+  <circle cx="872" cy="315" r="217" stroke="#15121A" stroke-width="2"/>
+  <rect x="710" y="226" width="324" height="168" rx="38" fill="url(#card)" stroke="#3A2730"/>
+  <circle cx="795" cy="310" r="63" fill="url(#play)"/>
+  <path d="M779 282.5C779 278.266 783.698 275.718 787.252 278.027L834.016 308.402C837.276 310.521 837.276 315.479 834.016 317.598L787.252 347.973C783.698 350.282 779 347.734 779 343.5V282.5Z" fill="#09080D"/>
+  <rect x="855" y="270" width="138" height="16" rx="8" fill="#F3EEF8"/>
+  <rect x="855" y="298" width="118" height="16" rx="8" fill="#B9AEC8"/>
+  <rect x="855" y="326" width="92" height="14" rx="7" fill="#7F748F"/>
+
+  <rect x="711" y="459" width="114" height="38" rx="19" fill="#241922" stroke="#49313B"/>
+  <text x="768" y="484" text-anchor="middle" fill="#F7F4FB" font-size="18" font-family="Arial, sans-serif" font-weight="700">RSS</text>
+  <rect x="839" y="459" width="138" height="38" rx="19" fill="#241922" stroke="#49313B"/>
+  <text x="908" y="484" text-anchor="middle" fill="#F7F4FB" font-size="18" font-family="Arial, sans-serif" font-weight="700">Offline</text>
+  <rect x="991" y="459" width="110" height="38" rx="19" fill="#241922" stroke="#49313B"/>
+  <text x="1046" y="484" text-anchor="middle" fill="#F7F4FB" font-size="18" font-family="Arial, sans-serif" font-weight="700">Queue</text>
+
+  <text x="92" y="150" fill="#A998B0" font-size="20" font-family="Arial, sans-serif" font-weight="700" letter-spacing="3">BY SJTECH</text>
+  <text x="92" y="188" fill="#FF7B5B" font-size="30" font-family="Arial, sans-serif" font-weight="700">Wear OS podcast player</text>
+  <text x="92" y="276" fill="#F6F2FA" font-size="76" font-family="Arial, sans-serif" font-weight="800">WearPod</text>
+  <text x="92" y="336" fill="#C5BDCF" font-size="28" font-family="Arial, sans-serif">Standalone listening on your watch.</text>
+  <text x="92" y="375" fill="#9F95AE" font-size="28" font-family="Arial, sans-serif">Import RSS, play anywhere, download offline.</text>
+
+  <rect x="92" y="432" width="330" height="54" rx="27" fill="#1A141B" stroke="#3D2D36"/>
+  <text x="257" y="466" text-anchor="middle" fill="#F6F2FA" font-size="22" font-family="Arial, sans-serif" font-weight="700">Round-watch UI first</text>
+
+  <rect x="92" y="504" width="254" height="54" rx="27" fill="#1A141B" stroke="#3D2D36"/>
+  <text x="219" y="538" text-anchor="middle" fill="#F6F2FA" font-size="22" font-family="Arial, sans-serif" font-weight="700">Phone not required</text>
+</svg>
