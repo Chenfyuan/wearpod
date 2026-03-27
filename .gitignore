@@ -7,3 +7,4 @@
 /.kotlin/
 *.iml
 /tmp/
+/relay/node_modules/

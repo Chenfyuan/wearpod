@@ -8,13 +8,13 @@
 
 > A standalone, watch-first podcast player for Wear OS by SJTech.
 >
-> Import RSS, listen offline, and leave the phone behind.
+> Import by QR, listen offline, and leave the phone behind.
 
 ![WearPod cover](./docs/assets/wearpod-cover.svg)
 
 WearPod by SJTech is a standalone Wear OS podcast app prototype built for round watches first.
 
-It does not depend on a phone companion app. The current goal is simple: import a podcast feed by RSS URL directly on the watch, browse episodes, play audio, download episodes offline, and keep the core listening loop usable on a small wearable screen.
+It does not depend on a phone companion app. The current goal is simple: import feeds through a phone-assisted QR flow or direct RSS fallback, browse episodes, play audio, download episodes offline, and keep the core listening loop usable on a small wearable screen.
 
 ## Preview
 
@@ -31,6 +31,7 @@ It does not depend on a phone companion app. The current goal is simple: import 
 ## What WearPod does today
 
 - Import public podcast RSS feeds directly on the watch
+- Start a phone-assisted QR import session for RSS or OPML input on mobile
 - Manage subscriptions without a phone companion app
 - Favorite subscriptions and surface them on the home screen
 - Browse episode lists with filters for `All`, `Unplayed`, and `Downloaded`
@@ -59,6 +60,7 @@ Current scope:
 - standalone Wear OS app
 - public RSS feeds
 - lightweight on-watch library and playback
+- phone-assisted import for awkward text entry
 - offline listening on the watch
 
 Out of scope for this iteration:
@@ -67,7 +69,7 @@ Out of scope for this iteration:
 - cloud accounts
 - podcast discovery backend
 - private or paid feed authentication
-- OPML import/export
+- OPML export
 
 ## App flow
 
@@ -80,6 +82,7 @@ The current app is organized around three root watch pages:
 Secondary screens:
 
 - `Import`
+- `Phone import`
 - `Podcast detail`
 - `Player`
 - `Download & refresh settings`
@@ -143,6 +146,28 @@ adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s <device-id> shell am start -n com.sjtech.wearpod/.MainActivity
 ```
 
+### 4. Run the phone import relay locally
+
+The QR-based phone import flow depends on the lightweight relay in [`relay/`](/Users/linwj44/wearpod/relay).
+
+```bash
+cd relay
+npm install
+npm start
+```
+
+For emulator testing, the default local setup is:
+
+- watch API base: `http://10.0.2.2:8787`
+- relay public URL: `http://localhost:8787`
+
+For a real deployment, point both the app and the relay to a public HTTPS URL:
+
+```bash
+./gradlew assembleDebug -PwearpodImportRelayApiBaseUrl=https://your-relay.example.com
+PUBLIC_BASE_URL=https://your-relay.example.com npm start
+```
+
 ## Development notes
 
 ### Debug sample feed
@@ -152,6 +177,15 @@ adb -s <device-id> shell am start -n com.sjtech.wearpod/.MainActivity
 - `https://feed.xyzfm.space/xpa79uvcn9lw`
 
 This is only meant to make emulator testing faster.
+
+### Phone import relay
+
+The relay keeps a short-lived import session in memory and lets the phone submit:
+
+- one RSS URL, or
+- one OPML file
+
+The watch stays responsible for the actual feed fetch and import into local storage.
 
 ### Persistence model
 
@@ -197,7 +231,8 @@ Background refresh only runs when:
 
 - Public RSS feeds only
 - No authentication for private or paid feeds
-- No OPML import/export
+- No OPML export yet
+- QR import currently depends on a separately running relay service
 - No cloud sync across watch / phone / web
 - Storage is now split across Room and DataStore, but schema migration coverage is still minimal beyond the initial legacy JSON import
 - Audio output guidance for Bluetooth / unsuitable output still needs a more explicit UX
@@ -224,7 +259,7 @@ This project is released under the [MIT License](./LICENSE).
 
 The next meaningful steps are:
 
-1. OPML import/export
+1. OPML export
 2. Private / paid feed support
 3. Search
 4. Better audio output and Bluetooth guidance

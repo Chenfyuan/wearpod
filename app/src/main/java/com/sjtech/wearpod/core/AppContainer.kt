@@ -2,6 +2,7 @@ package com.sjtech.wearpod.core
 
 import android.app.Application
 import com.sjtech.wearpod.BuildConfig
+import com.sjtech.wearpod.data.importing.ImportRelayClient
 import com.sjtech.wearpod.data.repository.WearPodRepository
 import com.sjtech.wearpod.data.rss.FeedNetworkClient
 import com.sjtech.wearpod.data.rss.PodcastFeedParser
@@ -24,12 +25,14 @@ class AppContainer(application: Application) {
     private val store = WearPodStore(application)
     private val parser = PodcastFeedParser()
     private val networkClient = FeedNetworkClient()
+    private val importRelayClient = ImportRelayClient(BuildConfig.IMPORT_RELAY_API_BASE_URL)
 
     val repository = WearPodRepository(
         appContext = application,
         store = store,
         parser = parser,
         networkClient = networkClient,
+        importRelayClient = importRelayClient,
     )
 
     val playerGateway = PlayerGateway(

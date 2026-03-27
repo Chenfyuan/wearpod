@@ -6,9 +6,14 @@ import com.sjtech.wearpod.data.model.DownloadSettings
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.ImportSuggestion
+import com.sjtech.wearpod.data.model.PhoneImportPreview
+import com.sjtech.wearpod.data.model.PhoneImportResult
+import com.sjtech.wearpod.data.model.PhoneImportSession
+import com.sjtech.wearpod.data.model.PhoneImportSessionSnapshot
 import com.sjtech.wearpod.data.model.PlaybackMemory
 import com.sjtech.wearpod.data.model.SleepTimer
 import com.sjtech.wearpod.data.model.Subscription
+import com.sjtech.wearpod.data.importing.ImportRelayClient
 import com.sjtech.wearpod.data.rss.FeedNetworkClient
 import com.sjtech.wearpod.data.rss.ParsedFeed
 import com.sjtech.wearpod.data.rss.ParsedEpisode
@@ -29,6 +34,7 @@ class WearPodRepository(
     private val store: WearPodStore,
     private val parser: PodcastFeedParser,
     private val networkClient: FeedNetworkClient,
+    private val importRelayClient: ImportRelayClient,
 ) {
     private val mutex = Mutex()
     private val mutableSnapshot = MutableStateFlow(store.read())
@@ -46,6 +52,70 @@ class WearPodRepository(
         val existing = mutableSnapshot.value.subscriptions.firstOrNull { it.feedUrl == normalizedUrl }
         if (existing != null) return existing
         return runCatching { importFeed(normalizedUrl) }.getOrNull()
+    }
+
+    fun isPhoneImportAvailable(): Boolean = importRelayClient.isConfigured()
+
+    suspend fun createPhoneImportSession(): PhoneImportSession = importRelayClient.createSession()
+
+    suspend fun fetchPhoneImportSession(sessionId: String): PhoneImportSessionSnapshot =
+        importRelayClient.fetchSession(sessionId)
+
+    fun previewPhoneImport(
+        feedUrls: List<String>,
+        invalidCount: Int,
+        duplicateCountWithinPayload: Int,
+    ): PhoneImportPreview {
+        val existingFeedUrls = mutableSnapshot.value.subscriptions
+            .map { normalizeUrl(it.feedUrl) }
+            .toMutableSet()
+        val newFeedUrls = mutableListOf<String>()
+        var duplicateCount = duplicateCountWithinPayload
+
+        feedUrls.forEach { rawUrl ->
+            val normalizedUrl = normalizeUrl(rawUrl)
+            if (!existingFeedUrls.add(normalizedUrl)) {
+                duplicateCount += 1
+            } else {
+                newFeedUrls += normalizedUrl
+            }
+        }
+
+        return PhoneImportPreview(
+            newFeedUrls = newFeedUrls,
+            newCount = newFeedUrls.size,
+            duplicateCount = duplicateCount,
+            invalidCount = invalidCount,
+        )
+    }
+
+    suspend fun importFeeds(feedUrls: List<String>): PhoneImportResult {
+        val importedSubscriptions = mutableListOf<Subscription>()
+        val failedUrls = mutableListOf<String>()
+        var duplicateCount = 0
+        val existingFeedUrls = mutableSnapshot.value.subscriptions
+            .map { normalizeUrl(it.feedUrl) }
+            .toMutableSet()
+
+        feedUrls
+            .map(::normalizeUrl)
+            .distinct()
+            .forEach { feedUrl ->
+                if (!existingFeedUrls.add(feedUrl)) {
+                    duplicateCount += 1
+                    return@forEach
+                }
+
+                runCatching { importFeed(feedUrl) }
+                    .onSuccess(importedSubscriptions::add)
+                    .onFailure { failedUrls += feedUrl }
+            }
+
+        return PhoneImportResult(
+            importedSubscriptions = importedSubscriptions,
+            duplicateCount = duplicateCount,
+            failedUrls = failedUrls,
+        )
     }
 
     suspend fun importFeed(rawUrl: String): Subscription {

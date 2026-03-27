@@ -62,7 +62,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,8 +89,10 @@ import com.sjtech.wearpod.playback.PlayerSnapshot
 import com.sjtech.wearpod.playback.VolumeSnapshot
 import com.sjtech.wearpod.ui.components.ArtworkThumb
 import com.sjtech.wearpod.ui.components.CircularProgressRing
+import com.sjtech.wearpod.ui.components.DarkCard
 import com.sjtech.wearpod.ui.components.MiniIconButton
 import com.sjtech.wearpod.ui.components.PillButton
+import com.sjtech.wearpod.ui.components.QrCodeMatrix
 import com.sjtech.wearpod.ui.components.SectionTitle
 import com.sjtech.wearpod.ui.components.WatchChip
 import com.sjtech.wearpod.ui.components.WatchCompactChip
@@ -109,6 +113,7 @@ import com.sjtech.wearpod.util.formatBytes
 import com.sjtech.wearpod.util.formatDurationShort
 import com.sjtech.wearpod.util.formatRelativeTime
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val ROOT_SCREENS = listOf(
@@ -270,6 +275,13 @@ private fun ScreenContent(
             viewModel = viewModel,
         )
 
+        WearPodScreen.PhoneImport -> PhoneImportScreen(
+            state = viewModel.phoneImportState,
+            onRetry = viewModel::retryPhoneImportSession,
+            onConfirmImport = viewModel::confirmPhoneImport,
+            onOpenSubscriptions = viewModel::openSubscriptionsRoot,
+        )
+
         WearPodScreen.DownloadSettings -> DownloadSettingsScreen(
             snapshot = snapshot,
             onSetWifiOnly = viewModel::setWifiOnlyDownloads,
@@ -353,6 +365,7 @@ private fun screenKey(screen: WearPodScreen): String = when (screen) {
     WearPodScreen.Home -> "home"
     WearPodScreen.Subscriptions -> "subscriptions"
     WearPodScreen.Import -> "import"
+    WearPodScreen.PhoneImport -> "phone-import"
     WearPodScreen.Downloads -> "downloads"
     WearPodScreen.DownloadSettings -> "download-settings"
     is WearPodScreen.PodcastDetail -> "podcast-${screen.subscriptionId}"
@@ -886,7 +899,35 @@ private fun ImportScreen(
         }
 
         item {
-            SectionTitle(title = "导入订阅", subtitle = "输入播客 RSS 地址")
+            SectionTitle(title = "导入订阅", subtitle = "手机扫码更适合手表")
+        }
+
+        item {
+            PillButton(
+                text = "手机导入（推荐）",
+                background = WearPodPrimary,
+                foreground = WearPodBackground,
+                modifier = Modifier.fillMaxWidth(),
+                leading = {
+                    Icon(
+                        Icons.Rounded.Link,
+                        contentDescription = null,
+                        tint = WearPodBackground,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                onClick = viewModel::openPhoneImport,
+            )
+        }
+
+        item {
+            Text(
+                "或手动输入 RSS",
+                color = WearPodTextMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
         }
 
         item {
@@ -970,6 +1011,273 @@ private fun ImportScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneImportScreen(
+    state: PhoneImportUiState,
+    onRetry: () -> Unit,
+    onConfirmImport: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
+) {
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(state.stage, state.expiresAtEpochMillis) {
+        while (state.stage == PhoneImportStage.WAITING && state.expiresAtEpochMillis != null) {
+            nowMillis = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+
+    val secondsRemaining = remember(state.expiresAtEpochMillis, nowMillis) {
+        state.expiresAtEpochMillis
+            ?.minus(nowMillis)
+            ?.div(1_000L)
+            ?.coerceAtLeast(0L)
+            ?.toInt()
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                WatchTimeHeader(color = WearPodTextMuted)
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "手机导入",
+                subtitle = when (state.stage) {
+                    PhoneImportStage.CREATING -> "正在生成二维码"
+                    PhoneImportStage.WAITING -> "用手机扫码继续"
+                    PhoneImportStage.REVIEW -> "手机已提交，确认后导入"
+                    PhoneImportStage.IMPORTING -> "正在导入订阅"
+                    PhoneImportStage.SUCCESS -> "手机导入完成"
+                    PhoneImportStage.EXPIRED -> "二维码已过期"
+                    PhoneImportStage.ERROR -> "生成二维码失败"
+                    else -> "用手机导入 RSS 或 OPML"
+                },
+            )
+        }
+
+        when (state.stage) {
+            PhoneImportStage.CREATING -> item {
+                DarkCard {
+                    Text(
+                        "正在生成导入会话...",
+                        color = WearPodTextPrimary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            PhoneImportStage.WAITING -> {
+                item {
+                    DarkCard {
+                        if (!state.mobileUrl.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                QrCodeMatrix(
+                                    data = state.mobileUrl,
+                                    modifier = Modifier.size(132.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        Text(
+                            "用手机扫码导入 RSS 或 OPML",
+                            color = WearPodTextPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                        )
+                        if (!state.shortCode.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                WatchCompactChip(
+                                    text = "短码 ${state.shortCode}",
+                                    highlighted = true,
+                                )
+                            }
+                        }
+                        if (secondsRemaining != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "剩余 ${secondsRemaining}s",
+                                color = WearPodTextMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Text(
+                        "手机提交后，手表会自动出现导入摘要。",
+                        color = WearPodTextMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            PhoneImportStage.REVIEW -> {
+                val preview = state.preview
+                if (preview != null) {
+                    item {
+                        DarkCard {
+                            Text(
+                                "待导入 ${preview.newCount} 个",
+                                color = WearPodTextPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                WatchMetricPill(
+                                    label = "新增",
+                                    value = preview.newCount.toString(),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                WatchMetricPill(
+                                    label = "重复",
+                                    value = preview.duplicateCount.toString(),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                WatchMetricPill(
+                                    label = "无效",
+                                    value = preview.invalidCount.toString(),
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        PillButton(
+                            text = "确认导入",
+                            background = WearPodPrimary,
+                            foreground = WearPodBackground,
+                            modifier = Modifier.fillMaxWidth(),
+                            leading = {
+                                Icon(
+                                    Icons.Rounded.CloudDownload,
+                                    contentDescription = null,
+                                    tint = WearPodBackground,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                            onClick = onConfirmImport,
+                        )
+                    }
+                }
+            }
+
+            PhoneImportStage.IMPORTING -> item {
+                DarkCard {
+                    Text(
+                        "正在同步订阅到手表...",
+                        color = WearPodTextPrimary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            PhoneImportStage.SUCCESS -> {
+                item {
+                    DarkCard {
+                        Text(
+                            "已导入 ${state.importedCount} 个",
+                            color = WearPodTextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            WatchMetricPill(
+                                label = "重复",
+                                value = state.duplicateCountAfterImport.toString(),
+                                modifier = Modifier.weight(1f),
+                            )
+                            WatchMetricPill(
+                                label = "失败",
+                                value = state.failedCount.toString(),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    PillButton(
+                        text = "查看订阅",
+                        background = WearPodPrimary,
+                        foreground = WearPodBackground,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onOpenSubscriptions,
+                    )
+                }
+            }
+
+            PhoneImportStage.ERROR,
+            PhoneImportStage.EXPIRED,
+            -> item {
+                DarkCard {
+                    Text(
+                        state.error ?: "导入会话不可用",
+                        color = WearPodTextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PillButton(
+                        text = "重新生成二维码",
+                        background = WearPodSurfaceSoft,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onRetry,
+                    )
+                }
+            }
+
+            PhoneImportStage.IDLE -> item {
+                PillButton(
+                    text = "生成二维码",
+                    background = WearPodPrimary,
+                    foreground = WearPodBackground,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onRetry,
+                )
             }
         }
     }

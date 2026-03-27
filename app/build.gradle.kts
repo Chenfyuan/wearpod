@@ -5,6 +5,13 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+val debugImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiBaseUrlDebug") as String?)
+    ?: (project.findProperty("wearpodImportRelayApiBaseUrl") as String?)
+    ?: "http://10.0.2.2:8787"
+val releaseImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiBaseUrlRelease") as String?)
+    ?: (project.findProperty("wearpodImportRelayApiBaseUrl") as String?)
+    ?: ""
+
 android {
     namespace = "com.sjtech.wearpod"
     compileSdk = 36
@@ -23,8 +30,20 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "IMPORT_RELAY_API_BASE_URL",
+                "\"$debugImportRelayApiBaseUrl\"",
+            )
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField(
+                "String",
+                "IMPORT_RELAY_API_BASE_URL",
+                "\"$releaseImportRelayApiBaseUrl\"",
+            )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -80,6 +99,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.zxing.core)
     kapt(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

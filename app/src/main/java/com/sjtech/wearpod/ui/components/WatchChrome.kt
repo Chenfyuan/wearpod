@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -74,6 +75,9 @@ import com.sjtech.wearpod.ui.theme.WearPodSurface
 import com.sjtech.wearpod.ui.theme.WearPodSurfaceSoft
 import com.sjtech.wearpod.ui.theme.WearPodTextMuted
 import com.sjtech.wearpod.ui.theme.WearPodTextPrimary
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.MultiFormatWriter
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
@@ -252,6 +256,55 @@ fun DarkCard(
             .padding(14.dp),
         content = content,
     )
+}
+
+@Composable
+fun QrCodeMatrix(
+    data: String,
+    modifier: Modifier = Modifier,
+    foreground: Color = Color.Black,
+    background: Color = Color.White,
+) {
+    val bitMatrix = remember(data) {
+        MultiFormatWriter().encode(
+            data,
+            BarcodeFormat.QR_CODE,
+            1,
+            1,
+            mapOf(
+                EncodeHintType.MARGIN to 1,
+            ),
+        )
+    }
+
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(background)
+            .padding(10.dp),
+    ) {
+        val width = bitMatrix.width
+        val height = bitMatrix.height
+        val cellSize = minOf(size.width / width, size.height / height)
+        val qrWidth = width * cellSize
+        val qrHeight = height * cellSize
+        val originX = (size.width - qrWidth) / 2f
+        val originY = (size.height - qrHeight) / 2f
+
+        drawRect(background)
+
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                if (bitMatrix.get(x, y)) {
+                    drawRect(
+                        color = foreground,
+                        topLeft = Offset(originX + x * cellSize, originY + y * cellSize),
+                        size = Size(cellSize, cellSize),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

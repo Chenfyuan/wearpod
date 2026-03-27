@@ -7,18 +7,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.ImportSuggestion
+import com.sjtech.wearpod.data.model.PhoneImportPreview
+import com.sjtech.wearpod.data.model.PhoneImportSessionStatus
 import com.sjtech.wearpod.data.repository.WearPodRepository
 import com.sjtech.wearpod.download.EpisodeDownloadScheduler
 import com.sjtech.wearpod.playback.AudioOutputController
 import com.sjtech.wearpod.playback.PlayerGateway
 import com.sjtech.wearpod.playback.VolumeController
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 sealed interface WearPodScreen {
     data object Home : WearPodScreen
     data object Subscriptions : WearPodScreen
     data object Import : WearPodScreen
+    data object PhoneImport : WearPodScreen
     data object Downloads : WearPodScreen
     data object DownloadSettings : WearPodScreen
     data class PodcastDetail(val subscriptionId: String) : WearPodScreen
@@ -31,6 +36,30 @@ enum class EpisodeFilter {
     DOWNLOADED,
 }
 
+enum class PhoneImportStage {
+    IDLE,
+    CREATING,
+    WAITING,
+    REVIEW,
+    IMPORTING,
+    SUCCESS,
+    ERROR,
+    EXPIRED,
+}
+
+data class PhoneImportUiState(
+    val stage: PhoneImportStage = PhoneImportStage.IDLE,
+    val sessionId: String? = null,
+    val shortCode: String? = null,
+    val mobileUrl: String? = null,
+    val expiresAtEpochMillis: Long? = null,
+    val preview: PhoneImportPreview? = null,
+    val importedCount: Int = 0,
+    val duplicateCountAfterImport: Int = 0,
+    val failedCount: Int = 0,
+    val error: String? = null,
+)
+
 class WearPodViewModel(
     val repository: WearPodRepository,
     val playerGateway: PlayerGateway,
@@ -39,6 +68,8 @@ class WearPodViewModel(
     private val downloadScheduler: EpisodeDownloadScheduler,
 ) : ViewModel() {
     private val history = ArrayDeque<WearPodScreen>()
+    private var phoneImportCreateJob: Job? = null
+    private var phoneImportPollJob: Job? = null
 
     var currentScreen by mutableStateOf<WearPodScreen>(WearPodScreen.Home)
         private set
@@ -61,6 +92,8 @@ class WearPodViewModel(
         private set
     var bannerMessage by mutableStateOf<String?>(null)
         private set
+    var phoneImportState by mutableStateOf(PhoneImportUiState())
+        private set
 
     val snapshot = repository.snapshot
     val playerState = playerGateway.playerState
@@ -68,6 +101,9 @@ class WearPodViewModel(
     val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
     fun openRoot(screen: WearPodScreen) {
+        if (currentScreen == WearPodScreen.PhoneImport) {
+            clearPhoneImportState()
+        }
         history.clear()
         currentScreen = screen
         syncBackState()
@@ -89,18 +125,36 @@ class WearPodViewModel(
         push(WearPodScreen.Import)
     }
 
+    fun openPhoneImport() {
+        if (!repository.isPhoneImportAvailable()) {
+            showBanner("手机导入服务未配置")
+            return
+        }
+        push(WearPodScreen.PhoneImport)
+        createPhoneImportSession()
+    }
+
     fun push(screen: WearPodScreen) {
+        if (screen != WearPodScreen.PhoneImport) {
+            clearPhoneImportIfNeeded()
+        }
         history.addLast(currentScreen)
         currentScreen = screen
         syncBackState()
     }
 
     fun replaceCurrent(screen: WearPodScreen) {
+        if (currentScreen == WearPodScreen.PhoneImport && screen != WearPodScreen.PhoneImport) {
+            clearPhoneImportState()
+        }
         currentScreen = screen
         syncBackState()
     }
 
     fun back() {
+        if (currentScreen == WearPodScreen.PhoneImport) {
+            clearPhoneImportState()
+        }
         if (history.isNotEmpty()) {
             currentScreen = history.removeLast()
         } else {
@@ -144,6 +198,37 @@ class WearPodViewModel(
                 importError = throwable.message ?: "导入失败"
             }
         }
+    }
+
+    fun retryPhoneImportSession() {
+        createPhoneImportSession()
+    }
+
+    fun confirmPhoneImport() {
+        val preview = phoneImportState.preview ?: return
+        viewModelScope.launch {
+            phoneImportState = phoneImportState.copy(
+                stage = PhoneImportStage.IMPORTING,
+                error = null,
+            )
+
+            val result = repository.importFeeds(preview.newFeedUrls)
+            result.importedSubscriptions.forEach { subscription ->
+                enqueueAutoDownloads(subscription.id)
+            }
+
+            phoneImportState = phoneImportState.copy(
+                stage = PhoneImportStage.SUCCESS,
+                importedCount = result.importedSubscriptions.size,
+                duplicateCountAfterImport = result.duplicateCount,
+                failedCount = result.failedUrls.size,
+            )
+            showBanner("已导入 ${result.importedSubscriptions.size} 个订阅")
+        }
+    }
+
+    fun openSubscriptionsRoot() {
+        openRoot(WearPodScreen.Subscriptions)
     }
 
     fun refreshAll() {
@@ -452,6 +537,89 @@ class WearPodViewModel(
         audioOutputController.showSystemOutputSwitcher()
     }
 
+    private fun createPhoneImportSession() {
+        phoneImportCreateJob?.cancel()
+        phoneImportPollJob?.cancel()
+        phoneImportState = PhoneImportUiState(stage = PhoneImportStage.CREATING)
+        phoneImportCreateJob = viewModelScope.launch {
+            runCatching { repository.createPhoneImportSession() }
+                .onSuccess { session ->
+                    if (currentScreen != WearPodScreen.PhoneImport) {
+                        return@onSuccess
+                    }
+                    phoneImportState = PhoneImportUiState(
+                        stage = PhoneImportStage.WAITING,
+                        sessionId = session.sessionId,
+                        shortCode = session.shortCode,
+                        mobileUrl = session.mobileUrl,
+                        expiresAtEpochMillis = session.expiresAtEpochMillis,
+                    )
+                    startPhoneImportPolling(session.sessionId)
+                }
+                .onFailure { throwable ->
+                    phoneImportState = PhoneImportUiState(
+                        stage = PhoneImportStage.ERROR,
+                        error = throwable.message ?: "创建二维码失败",
+                    )
+                }
+        }
+    }
+
+    private fun startPhoneImportPolling(sessionId: String) {
+        phoneImportPollJob?.cancel()
+        phoneImportPollJob = viewModelScope.launch {
+            while (isActive && currentScreen == WearPodScreen.PhoneImport) {
+                val session = runCatching { repository.fetchPhoneImportSession(sessionId) }
+                    .getOrElse { throwable ->
+                        phoneImportState = phoneImportState.copy(
+                            stage = PhoneImportStage.ERROR,
+                            error = throwable.message ?: "获取导入状态失败",
+                        )
+                        return@launch
+                    }
+
+                when (session.status) {
+                    PhoneImportSessionStatus.PENDING -> {
+                        phoneImportState = phoneImportState.copy(
+                            stage = PhoneImportStage.WAITING,
+                            sessionId = session.sessionId,
+                            shortCode = session.shortCode,
+                            mobileUrl = session.mobileUrl,
+                            expiresAtEpochMillis = session.expiresAtEpochMillis,
+                        )
+                    }
+
+                    PhoneImportSessionStatus.SUBMITTED -> {
+                        phoneImportState = phoneImportState.copy(
+                            stage = PhoneImportStage.REVIEW,
+                            sessionId = session.sessionId,
+                            shortCode = session.shortCode,
+                            mobileUrl = session.mobileUrl,
+                            expiresAtEpochMillis = session.expiresAtEpochMillis,
+                            preview = repository.previewPhoneImport(
+                                feedUrls = session.feedUrls,
+                                invalidCount = session.invalidCount,
+                                duplicateCountWithinPayload = session.duplicateCountWithinPayload,
+                            ),
+                            error = null,
+                        )
+                        phoneImportPollJob?.cancel()
+                    }
+
+                    PhoneImportSessionStatus.EXPIRED -> {
+                        phoneImportState = phoneImportState.copy(
+                            stage = PhoneImportStage.EXPIRED,
+                            error = "二维码已过期",
+                        )
+                        phoneImportPollJob?.cancel()
+                    }
+                }
+
+                delay(2_500L)
+            }
+        }
+    }
+
     private fun showBanner(message: String) {
         bannerMessage = message
         viewModelScope.launch {
@@ -464,6 +632,20 @@ class WearPodViewModel(
 
     private fun syncBackState() {
         canGoBack = history.isNotEmpty()
+    }
+
+    private fun clearPhoneImportIfNeeded() {
+        if (currentScreen == WearPodScreen.PhoneImport) {
+            clearPhoneImportState()
+        }
+    }
+
+    private fun clearPhoneImportState() {
+        phoneImportCreateJob?.cancel()
+        phoneImportCreateJob = null
+        phoneImportPollJob?.cancel()
+        phoneImportPollJob = null
+        phoneImportState = PhoneImportUiState()
     }
 
     private suspend fun enqueueAutoDownloads(subscriptionId: String) {
