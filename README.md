@@ -47,6 +47,7 @@ It does not depend on a phone companion app. The current goal is simple: import 
   - switch within the current queue
   - seek backward / forward
   - cycle playback speed
+  - adjust media volume from player controls and hardware volume keys
 - Use a sleep timer from the player for `15`, `30`, or `60` minutes
 
 ## Product scope
@@ -90,7 +91,8 @@ Secondary screens:
 - Media3
 - WorkManager
 - Coil 3
-- JSON file persistence in app-private storage
+- Room for subscriptions, episodes, and favorites
+- DataStore Preferences for playback memory, download settings, and sleep timer
 
 ## Requirements
 
@@ -153,16 +155,12 @@ This is only meant to make emulator testing faster.
 
 ### Persistence model
 
-The app currently stores state in a single JSON file under app-private storage. That includes:
+The app now uses a split persistence model:
 
-- subscriptions
-- episodes
-- favorites
-- playback memory
-- download settings
-- sleep timer state
+- `Room` stores subscriptions, episodes, and favorite relationships
+- `DataStore Preferences` stores playback memory, download settings, and sleep timer state
 
-This keeps the prototype simple, but it is not the long-term persistence strategy.
+On first launch after upgrading from older builds, WearPod automatically migrates the legacy `wearpod_state.json` file into the new storage model.
 
 ### Background work
 
@@ -201,7 +199,7 @@ Background refresh only runs when:
 - No authentication for private or paid feeds
 - No OPML import/export
 - No cloud sync across watch / phone / web
-- State persistence is file-based rather than Room/DataStore-backed
+- Storage is now split across Room and DataStore, but schema migration coverage is still minimal beyond the initial legacy JSON import
 - Audio output guidance for Bluetooth / unsuitable output still needs a more explicit UX
 
 ## Validation

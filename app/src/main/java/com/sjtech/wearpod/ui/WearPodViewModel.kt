@@ -9,7 +9,9 @@ import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.ImportSuggestion
 import com.sjtech.wearpod.data.repository.WearPodRepository
 import com.sjtech.wearpod.download.EpisodeDownloadScheduler
+import com.sjtech.wearpod.playback.AudioOutputController
 import com.sjtech.wearpod.playback.PlayerGateway
+import com.sjtech.wearpod.playback.VolumeController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -32,6 +34,8 @@ enum class EpisodeFilter {
 class WearPodViewModel(
     val repository: WearPodRepository,
     val playerGateway: PlayerGateway,
+    private val audioOutputController: AudioOutputController,
+    private val volumeController: VolumeController,
     private val downloadScheduler: EpisodeDownloadScheduler,
 ) : ViewModel() {
     private val history = ArrayDeque<WearPodScreen>()
@@ -60,6 +64,7 @@ class WearPodViewModel(
 
     val snapshot = repository.snapshot
     val playerState = playerGateway.playerState
+    val volumeState = volumeController.state
     val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
     fun openRoot(screen: WearPodScreen) {
@@ -110,6 +115,7 @@ class WearPodViewModel(
     }
 
     fun openPlayer() {
+        volumeController.refresh()
         push(WearPodScreen.Player)
     }
 
@@ -304,6 +310,7 @@ class WearPodViewModel(
                 startEpisodeId = episodeId,
                 subscriptionTitle = subscription.title,
             )
+            volumeController.refresh()
             push(WearPodScreen.Player)
         }
     }
@@ -319,6 +326,7 @@ class WearPodViewModel(
                 subscriptionTitle = subscription.title,
                 shuffleQueue = true,
             )
+            volumeController.refresh()
             push(WearPodScreen.Player)
         }
     }
@@ -422,6 +430,26 @@ class WearPodViewModel(
             playerGateway.clearSleepTimer()
             showBanner("已关闭睡眠定时")
         }
+    }
+
+    fun syncVolume() {
+        volumeController.refresh()
+    }
+
+    fun increaseVolume() {
+        volumeController.increase()
+    }
+
+    fun decreaseVolume() {
+        volumeController.decrease()
+    }
+
+    fun showSystemVolumePanel() {
+        volumeController.showSystemPanel()
+    }
+
+    fun openAudioOutputSwitcher() {
+        audioOutputController.showSystemOutputSwitcher()
     }
 
     private fun showBanner(message: String) {

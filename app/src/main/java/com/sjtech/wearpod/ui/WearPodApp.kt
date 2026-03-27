@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Headset
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Undo
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +84,7 @@ import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.Subscription
 import com.sjtech.wearpod.playback.PlayerQueueItemSnapshot
 import com.sjtech.wearpod.playback.PlayerSnapshot
+import com.sjtech.wearpod.playback.VolumeSnapshot
 import com.sjtech.wearpod.ui.components.ArtworkThumb
 import com.sjtech.wearpod.ui.components.CircularProgressRing
 import com.sjtech.wearpod.ui.components.MiniIconButton
@@ -118,6 +122,7 @@ private val ROOT_SCREENS = listOf(
 fun WearPodApp(viewModel: WearPodViewModel) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val player by viewModel.playerState.collectAsStateWithLifecycle()
+    val volume by viewModel.volumeState.collectAsStateWithLifecycle()
     val screen = viewModel.currentScreen
     val rootIndex = rootScreenIndex(screen)
     val previousScreen = viewModel.previousScreen
@@ -185,6 +190,7 @@ fun WearPodApp(viewModel: WearPodViewModel) {
                         screen = targetScreen,
                         snapshot = snapshot,
                         player = player,
+                        volume = volume,
                         viewModel = viewModel,
                         showNavigation = !isBackground,
                     )
@@ -245,6 +251,7 @@ private fun ScreenContent(
     screen: WearPodScreen,
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     player: PlayerSnapshot,
+    volume: VolumeSnapshot,
     viewModel: WearPodViewModel,
     showNavigation: Boolean,
 ) {
@@ -324,6 +331,8 @@ private fun ScreenContent(
             onSeekBack = viewModel::seekBackward,
             onSeekForward = viewModel::seekForward,
             onCycleSpeed = viewModel::cycleSpeed,
+            onOpenAudioOutput = viewModel::openAudioOutputSwitcher,
+            onOpenVolume = viewModel::showSystemVolumePanel,
             sleepTimerEndsAtEpochMillis = snapshot.sleepTimer.endsAtEpochMillis,
             sleepTimerPresetMinutes = snapshot.sleepTimer.presetMinutes,
             onStartSleepTimer = viewModel::startSleepTimer,
@@ -1279,6 +1288,8 @@ private fun PlayerScreen(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onCycleSpeed: () -> Unit,
+    onOpenAudioOutput: () -> Unit,
+    onOpenVolume: () -> Unit,
     sleepTimerEndsAtEpochMillis: Long?,
     sleepTimerPresetMinutes: Int?,
     onStartSleepTimer: (Int) -> Unit,
@@ -1348,46 +1359,10 @@ private fun PlayerScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             state = detailsListState,
-            contentPadding = PaddingValues(top = 236.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 252.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(Color(0x7A07060B))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = playerSubtitle.ifBlank { "WearPod" },
-                        color = WearPodPrimarySoft,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = currentTitle,
-                        color = WearPodTextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 15.sp,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = progressLabel,
-                        color = WearPodTextPrimary.copy(alpha = 0.78f),
-                        fontSize = 12.sp,
-                    )
-                }
-            }
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -1396,14 +1371,14 @@ private fun PlayerScreen(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         MiniIconButton(
-                            modifier = Modifier.size(42.dp).graphicsLayer { alpha = if (hasPrevious) 1f else 0.4f },
-                            onClick = onPrevious,
+                            modifier = Modifier.size(42.dp),
+                            onClick = onSeekBack,
                         ) {
-                            Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = WearPodTextPrimary, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Replay10, contentDescription = null, tint = WearPodTextPrimary, modifier = Modifier.size(20.dp))
                         }
                         MiniIconButton(
                             modifier = Modifier.size(42.dp),
@@ -1415,24 +1390,6 @@ private fun PlayerScreen(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                             )
-                        }
-                        MiniIconButton(
-                            modifier = Modifier.size(42.dp).graphicsLayer { alpha = if (hasNext) 1f else 0.4f },
-                            onClick = onNext,
-                        ) {
-                            Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = WearPodTextPrimary, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        MiniIconButton(
-                            modifier = Modifier.size(42.dp),
-                            onClick = onSeekBack,
-                        ) {
-                            Icon(Icons.Rounded.Replay10, contentDescription = null, tint = WearPodTextPrimary, modifier = Modifier.size(20.dp))
                         }
                         MiniIconButton(
                             modifier = Modifier.size(42.dp),
@@ -1530,21 +1487,106 @@ private fun PlayerScreen(
                 .padding(top = 18.dp),
             color = WearPodTextPrimary.copy(alpha = 0.82f),
         )
+        Text(
+            text = currentTitle,
+            color = WearPodTextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 42.dp, start = 24.dp, end = 24.dp)
+                .graphicsLayer { alpha = centerButtonAlpha }
+                .basicMarquee(iterations = Int.MAX_VALUE),
+        )
+        Text(
+            text = playerSubtitle.ifBlank { "WearPod" },
+            color = WearPodPrimarySoft,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 60.dp, start = 34.dp, end = 34.dp)
+                .graphicsLayer { alpha = centerButtonAlpha },
+        )
         Box(
             modifier = Modifier
-                .size(136.dp)
+                .size(184.dp)
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    alpha = centerButtonAlpha
+                    scaleX = centerButtonScale
+                    scaleY = centerButtonScale
+                },
+        ) {
+            PlayerOverlayCircleButton(
+                modifier = Modifier.align(Alignment.CenterStart),
+                enabled = !hideCenterPlayback && hasPrevious,
+                onClick = onPrevious,
+            ) {
+                Icon(
+                    Icons.Rounded.SkipPrevious,
+                    contentDescription = null,
+                    tint = WearPodTextPrimary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.Headset,
+                contentDescription = null,
+                tint = WearPodTextPrimary.copy(alpha = centerButtonAlpha),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(x = (-54).dp, y = 36.dp)
+                    .clickable(onClick = onOpenAudioOutput)
+                    .padding(4.dp)
+                    .size(18.dp),
+            )
+            PlayerOverlayCircleButton(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enabled = !hideCenterPlayback && hasNext,
+                onClick = onNext,
+            ) {
+                Icon(
+                    Icons.Rounded.SkipNext,
+                    contentDescription = null,
+                    tint = WearPodTextPrimary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.VolumeUp,
+                contentDescription = null,
+                tint = WearPodTextPrimary.copy(alpha = centerButtonAlpha),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(x = 54.dp, y = 36.dp)
+                    .clickable(onClick = onOpenVolume)
+                    .padding(4.dp)
+                    .size(18.dp),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(64.dp)
                 .align(Alignment.Center),
             contentAlignment = Alignment.Center,
         ) {
             CircularProgressRing(
                 progress = progress,
                 modifier = Modifier.fillMaxSize(),
-                strokeWidth = 7.dp,
+                strokeWidth = 3.5.dp,
                 trackColor = Color(0x22FFFFFF),
+                waveEffect = true,
             )
             Box(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(46.dp)
                     .graphicsLayer {
                         alpha = centerButtonAlpha
                         scaleX = centerButtonScale
@@ -1569,11 +1611,55 @@ private fun PlayerScreen(
                     imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = null,
                     tint = WearPodBackground,
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(21.dp),
                 )
             }
         }
+        Text(
+            text = progressLabel,
+            color = WearPodTextPrimary.copy(alpha = 0.82f),
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(top = 112.dp)
+                .graphicsLayer { alpha = centerButtonAlpha },
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .graphicsLayer { alpha = centerButtonAlpha * 0.78f }
+                .width(28.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color.White.copy(alpha = 0.9f)),
+        )
     }
+}
+
+@Composable
+private fun PlayerOverlayCircleButton(
+    modifier: Modifier = Modifier,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color(0x8A15111A))
+            .then(
+                if (enabled) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
 }
 
 @Composable

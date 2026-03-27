@@ -1,8 +1,14 @@
 package com.sjtech.wearpod.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -523,8 +529,20 @@ fun CircularProgressRing(
     strokeWidth: Dp = 10.dp,
     trackColor: Color = Color(0x33FFFFFF),
     progressColor: Color = WearPodPrimary,
+    waveEffect: Boolean = false,
 ) {
+    val wavePhase by rememberInfiniteTransition(label = "ringWaveTransition").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "ringWavePhase",
+    )
     Canvas(modifier = modifier.aspectRatio(1f)) {
+        val progressSweep = 360f * progress.coerceIn(0f, 1f)
+        val ringStroke = strokeWidth.toPx()
         val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
         drawArc(
             color = trackColor,
@@ -533,10 +551,27 @@ fun CircularProgressRing(
             useCenter = false,
             style = stroke,
         )
+        if (waveEffect && progressSweep > 0f) {
+            drawArc(
+                brush = Brush.sweepGradient(
+                    listOf(
+                        Color.Transparent,
+                        progressColor.copy(alpha = 0.12f),
+                        Color(0xFFFFC0B1).copy(alpha = 0.4f),
+                        progressColor.copy(alpha = 0.18f),
+                        Color.Transparent,
+                    ),
+                ),
+                startAngle = -92f + (wavePhase * 24f),
+                sweepAngle = progressSweep * 0.9f,
+                useCenter = false,
+                style = Stroke(width = ringStroke * 1.28f, cap = StrokeCap.Round),
+            )
+        }
         drawArc(
             brush = Brush.sweepGradient(listOf(progressColor, Color(0xFFFFB29D), progressColor)),
             startAngle = -90f,
-            sweepAngle = 360f * progress.coerceIn(0f, 1f),
+            sweepAngle = progressSweep,
             useCenter = false,
             style = stroke,
         )

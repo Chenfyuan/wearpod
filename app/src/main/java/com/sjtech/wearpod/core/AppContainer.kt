@@ -7,7 +7,9 @@ import com.sjtech.wearpod.data.rss.FeedNetworkClient
 import com.sjtech.wearpod.data.rss.PodcastFeedParser
 import com.sjtech.wearpod.data.store.WearPodStore
 import com.sjtech.wearpod.download.EpisodeDownloadScheduler
+import com.sjtech.wearpod.playback.AudioOutputController
 import com.sjtech.wearpod.playback.PlayerGateway
+import com.sjtech.wearpod.playback.VolumeController
 import com.sjtech.wearpod.sync.SubscriptionRefreshScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,8 @@ class AppContainer(application: Application) {
         appContext = application,
         repository = repository,
     )
+    val audioOutputController = AudioOutputController(application)
+    val volumeController = VolumeController(application)
 
     val downloadScheduler = EpisodeDownloadScheduler(
         appContext = application,
