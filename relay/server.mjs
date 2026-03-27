@@ -234,13 +234,39 @@ function renderLandingPage() {
 </head>
 <body>
   <main class="shell">
-    <section class="card">
+    <section class="card card-hero">
       <div class="eyebrow">WearPod</div>
-      <h1>在手机上继续导入订阅</h1>
-      <p>扫描手表上的二维码，或输入手表显示的 6 位短码。</p>
-      <form method="post" action="/enter-code" class="stack">
-        <input name="shortCode" maxlength="6" placeholder="输入短码" autocomplete="off" />
-        <button type="submit">继续</button>
+      <h1>在手机上完成订阅导入</h1>
+      <p class="lede">手表负责播放和管理，手机只用来完成低频输入。</p>
+      <div class="hero-grid">
+        <div class="hero-step">
+          <div class="step-index">1</div>
+          <div>
+            <strong>扫描手表二维码</strong>
+            <p>进入本次导入会话</p>
+          </div>
+        </div>
+        <div class="hero-step">
+          <div class="step-index">2</div>
+          <div>
+            <strong>填写 RSS 或上传 OPML</strong>
+            <p>手机输入更轻松</p>
+          </div>
+        </div>
+        <div class="hero-step">
+          <div class="step-index">3</div>
+          <div>
+            <strong>回到手表确认导入</strong>
+            <p>真正导入仍由手表完成</p>
+          </div>
+        </div>
+      </div>
+      <form method="post" action="/enter-code" class="stack compact-stack">
+        <label>
+          短码进入
+          <input name="shortCode" maxlength="6" placeholder="输入 6 位短码" autocomplete="off" />
+        </label>
+        <button type="submit">继续到导入页</button>
       </form>
     </section>
   </main>
@@ -259,31 +285,80 @@ function renderSessionPage(session) {
 </head>
 <body>
   <main class="shell">
-    <section class="card">
+    <section class="card card-hero">
       <div class="eyebrow">WearPod</div>
-      <h1>导入到手表</h1>
-      <p>你也可以上传 OPML。手表会在确认后完成真正导入。</p>
-      <div class="badge">短码 ${session.shortCode}</div>
+      <div class="hero-topline">
+        <h1>导入到手表</h1>
+        <div class="badge">短码 ${session.shortCode}</div>
+      </div>
+      <p class="lede">你可以贴一个 RSS 地址，或者直接上传 OPML。手表会在确认后完成真正导入。</p>
+      <div class="session-strip">
+        <div>
+          <div class="strip-label">目标设备</div>
+          <div class="strip-value">WearPod on Wear OS</div>
+        </div>
+        <div>
+          <div class="strip-label">会话状态</div>
+          <div class="strip-value">等待手机提交</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card card-form">
       <form id="import-form" class="stack">
-        <label>
-          RSS 地址
-          <input name="rssUrl" placeholder="https://example.com/feed.xml" autocomplete="off" />
-        </label>
-        <label>
-          OPML 文件
-          <input name="opml" type="file" accept=".opml,.xml,text/xml,application/xml" />
-        </label>
-        <button type="submit">提交到手表</button>
+        <div class="input-card">
+          <div class="input-card-head">
+            <div class="input-card-icon">RSS</div>
+            <div>
+              <strong>导入单个订阅地址</strong>
+              <p>适合快速导入一档播客</p>
+            </div>
+          </div>
+          <label>
+            RSS 地址
+            <input name="rssUrl" placeholder="https://example.com/feed.xml" autocomplete="off" />
+          </label>
+        </div>
+
+        <div class="divider"><span>或</span></div>
+
+        <div class="input-card">
+          <div class="input-card-head">
+            <div class="input-card-icon">OPML</div>
+            <div>
+              <strong>批量导入 OPML</strong>
+              <p>适合从其他播客客户端迁移订阅</p>
+            </div>
+          </div>
+          <label class="file-picker">
+            <span>选择 OPML 文件</span>
+            <input id="opml-input" name="opml" type="file" accept=".opml,.xml,text/xml,application/xml" />
+            <em id="file-name">未选择文件</em>
+          </label>
+        </div>
+
+        <button id="submit-button" type="submit">提交到手表</button>
       </form>
       <div id="result" class="result"></div>
+      <p class="footnote">提交后，回到手表确认导入即可。</p>
     </section>
   </main>
   <script>
     const form = document.getElementById("import-form");
     const result = document.getElementById("result");
+    const fileInput = document.getElementById("opml-input");
+    const fileName = document.getElementById("file-name");
+    const submitButton = document.getElementById("submit-button");
+
+    fileInput.addEventListener("change", () => {
+      fileName.textContent = fileInput.files?.[0]?.name || "未选择文件";
+    });
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      result.textContent = "正在提交...";
+      result.className = "result is-visible";
+      result.innerHTML = "<strong>正在提交到手表...</strong><br />请稍等片刻。";
+      submitButton.disabled = true;
       const data = new FormData(form);
       try {
         const response = await fetch("/api/sessions/${session.sessionId}/import", {
@@ -294,10 +369,18 @@ function renderSessionPage(session) {
         if (!response.ok) {
           throw new Error(payload.message || "提交失败");
         }
-        result.innerHTML = \`<strong>已提交到手表</strong><br />新增候选 \${payload.acceptedCount} 个，重复 \${payload.duplicateCountWithinPayload} 个，无效 \${payload.invalidCount} 个。现在回到手表确认导入即可。\`;
+        result.className = "result is-visible is-success";
+        result.innerHTML = \`
+          <strong>已提交到手表</strong><br />
+          新增候选 \${payload.acceptedCount} 个，重复 \${payload.duplicateCountWithinPayload} 个，无效 \${payload.invalidCount} 个。现在回到手表确认导入即可。
+        \`;
         form.reset();
+        fileName.textContent = "未选择文件";
       } catch (error) {
+        result.className = "result is-visible is-error";
         result.textContent = error.message || "提交失败";
+      } finally {
+        submitButton.disabled = false;
       }
     });
   </script>
@@ -334,9 +417,13 @@ function baseStyles() {
       --bg: #09080d;
       --surface: #16121c;
       --surface-soft: #221b2a;
+      --surface-softer: #2d2436;
       --text: #f5f1fa;
       --muted: #a598b3;
       --accent: #ff7b5b;
+      --accent-soft: rgba(255, 123, 91, 0.14);
+      --success: #9df0b6;
+      --error: #ffb3b3;
       --border: rgba(255,255,255,0.08);
     }
     * { box-sizing: border-box; }
@@ -345,7 +432,8 @@ function baseStyles() {
       min-height: 100vh;
       font-family: ui-rounded, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
       background:
-        radial-gradient(circle at top, rgba(255, 123, 91, 0.22), transparent 30%),
+        radial-gradient(circle at top, rgba(255, 123, 91, 0.28), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(255,255,255,0.08), transparent 22%),
         var(--bg);
       color: var(--text);
     }
@@ -354,6 +442,7 @@ function baseStyles() {
       display: grid;
       place-items: center;
       padding: 24px;
+      gap: 16px;
     }
     .card {
       width: min(100%, 420px);
@@ -362,15 +451,31 @@ function baseStyles() {
       border-radius: 28px;
       padding: 24px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+      backdrop-filter: blur(20px);
+    }
+    .card-hero {
+      position: relative;
+      overflow: hidden;
+    }
+    .card-hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -80px auto;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(255,123,91,0.22), transparent 68%);
+      pointer-events: none;
     }
     .eyebrow {
       color: var(--accent);
       font-size: 13px;
       margin-bottom: 8px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
     h1 {
       margin: 0 0 10px;
-      font-size: 28px;
+      font-size: 30px;
       line-height: 1.1;
     }
     p {
@@ -378,9 +483,16 @@ function baseStyles() {
       line-height: 1.5;
       color: var(--muted);
     }
+    .lede {
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
     .stack {
       display: grid;
-      gap: 14px;
+      gap: 16px;
+    }
+    .compact-stack {
+      margin-top: 12px;
     }
     label {
       display: grid;
@@ -396,36 +508,230 @@ function baseStyles() {
       color: var(--text);
       padding: 14px 16px;
       font-size: 16px;
+      transition: border-color 160ms ease, transform 160ms ease;
+    }
+    input:focus {
+      outline: none;
+      border-color: rgba(255, 123, 91, 0.5);
     }
     button {
       border: 0;
       border-radius: 999px;
-      padding: 14px 18px;
-      background: var(--accent);
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #ff9a84, var(--accent));
       color: #140d14;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 14px 28px rgba(255,123,91,0.28);
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 34px rgba(255,123,91,0.32);
+    }
+    button:disabled {
+      opacity: 0.7;
+      cursor: progress;
     }
     .badge {
       display: inline-flex;
       align-items: center;
       padding: 8px 12px;
-      margin-bottom: 18px;
       border-radius: 999px;
-      background: rgba(255,123,91,0.16);
+      background: var(--accent-soft);
       color: var(--text);
       font-size: 13px;
+      border: 1px solid rgba(255,123,91,0.22);
     }
     .result {
-      margin-top: 16px;
+      display: none;
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
       font-size: 14px;
       line-height: 1.5;
       color: var(--muted);
     }
+    .result.is-visible {
+      display: block;
+    }
+    .result.is-success {
+      background: rgba(157, 240, 182, 0.08);
+      border-color: rgba(157, 240, 182, 0.2);
+      color: var(--text);
+    }
+    .result.is-error {
+      background: rgba(255, 123, 123, 0.08);
+      border-color: rgba(255, 123, 123, 0.18);
+      color: var(--error);
+    }
     .link {
       color: var(--accent);
       text-decoration: none;
+    }
+    .hero-grid {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+    .hero-step {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid var(--border);
+    }
+    .hero-step strong,
+    .input-card strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .hero-step p,
+    .input-card p {
+      margin: 0;
+      font-size: 13px;
+    }
+    .step-index,
+    .input-card-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid rgba(255,123,91,0.18);
+      flex-shrink: 0;
+    }
+    .hero-topline {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 8px;
+    }
+    .hero-topline h1 {
+      margin-bottom: 0;
+      max-width: 220px;
+    }
+    .session-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+      padding-top: 18px;
+    }
+    .session-strip > div {
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      padding: 14px;
+    }
+    .strip-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .strip-value {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .card-form {
+      background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018));
+    }
+    .input-card {
+      padding: 18px;
+      border-radius: 24px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+    }
+    .input-card-head {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .divider {
+      position: relative;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .divider::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--border);
+    }
+    .divider span {
+      position: relative;
+      padding: 0 10px;
+      background: #17131c;
+    }
+    .file-picker {
+      position: relative;
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--surface-soft);
+      border: 1px dashed rgba(255,255,255,0.12);
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .file-picker input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .file-picker span {
+      font-weight: 600;
+    }
+    .file-picker em {
+      font-style: normal;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footnote {
+      margin-top: 14px;
+      margin-bottom: 0;
+      font-size: 13px;
+      text-align: center;
+    }
+    @media (max-width: 480px) {
+      .shell {
+        padding: 16px;
+      }
+      .card {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      .hero-topline {
+        flex-direction: column;
+      }
+      .hero-topline h1 {
+        max-width: none;
+      }
+      .session-strip {
+        grid-template-columns: 1fr;
+      }
     }
   `;
 }
