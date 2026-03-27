@@ -97,6 +97,7 @@ class WearPodViewModel(
 
     val snapshot = repository.snapshot
     val playerState = playerGateway.playerState
+    val audioOutputState = audioOutputController.state
     val volumeState = volumeController.state
     val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
@@ -170,6 +171,7 @@ class WearPodViewModel(
 
     fun openPlayer() {
         volumeController.refresh()
+        audioOutputController.refresh()
         push(WearPodScreen.Player)
     }
 
@@ -317,8 +319,17 @@ class WearPodViewModel(
     fun toggleEpisodeCompleted(episode: Episode) {
         viewModelScope.launch {
             val completed = !episode.isCompleted
+            val autoDeletedDownload = completed &&
+                episode.downloadState == com.sjtech.wearpod.data.model.DownloadState.DOWNLOADED &&
+                snapshot.value.downloadSettings.autoDeletePlayedDownloads
             repository.setEpisodeCompleted(episode.id, completed)
-            showBanner(if (completed) "已标记已播" else "已标记未播")
+            showBanner(
+                when {
+                    completed && autoDeletedDownload -> "已标记已播并清理离线"
+                    completed -> "已标记已播"
+                    else -> "已标记未播"
+                },
+            )
         }
     }
 
@@ -377,6 +388,15 @@ class WearPodViewModel(
                 )
             }
             showBanner("改为每 ${normalizedHours} 小时后台刷新")
+        }
+    }
+
+    fun setAutoDeletePlayedDownloads(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateDownloadSettings { settings ->
+                settings.copy(autoDeletePlayedDownloads = enabled)
+            }
+            showBanner(if (enabled) "已开启自动清理已播" else "已关闭自动清理已播")
         }
     }
 
@@ -460,6 +480,33 @@ class WearPodViewModel(
         }
     }
 
+    fun clearCompletedDownloads() {
+        viewModelScope.launch {
+            val removedCount = repository.clearCompletedDownloads()
+            showBanner(
+                if (removedCount > 0) {
+                    "已清理 ${removedCount} 集已播缓存"
+                } else {
+                    "没有可清理的已播缓存"
+                },
+            )
+        }
+    }
+
+    fun clearDownloadsForSubscription(subscriptionId: String) {
+        val subscription = repository.subscription(subscriptionId) ?: return
+        viewModelScope.launch {
+            val removedCount = repository.clearDownloadsForSubscription(subscriptionId)
+            showBanner(
+                if (removedCount > 0) {
+                    "已清理 ${subscription.title}"
+                } else {
+                    "${subscription.title} 没有离线缓存"
+                },
+            )
+        }
+    }
+
     fun togglePlayPause() {
         viewModelScope.launch {
             playerGateway.togglePlayPause()
@@ -519,6 +566,10 @@ class WearPodViewModel(
 
     fun syncVolume() {
         volumeController.refresh()
+    }
+
+    fun syncAudioOutput() {
+        audioOutputController.refresh()
     }
 
     fun increaseVolume() {

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,6 +74,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,6 +87,8 @@ import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.Subscription
+import com.sjtech.wearpod.playback.AudioOutputKind
+import com.sjtech.wearpod.playback.AudioOutputSnapshot
 import com.sjtech.wearpod.playback.PlayerQueueItemSnapshot
 import com.sjtech.wearpod.playback.PlayerSnapshot
 import com.sjtech.wearpod.playback.VolumeSnapshot
@@ -127,6 +132,7 @@ private val ROOT_SCREENS = listOf(
 fun WearPodApp(viewModel: WearPodViewModel) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val player by viewModel.playerState.collectAsStateWithLifecycle()
+    val audioOutput by viewModel.audioOutputState.collectAsStateWithLifecycle()
     val volume by viewModel.volumeState.collectAsStateWithLifecycle()
     val screen = viewModel.currentScreen
     val rootIndex = rootScreenIndex(screen)
@@ -166,6 +172,7 @@ fun WearPodApp(viewModel: WearPodViewModel) {
                         screen = ROOT_SCREENS[page],
                         snapshot = snapshot,
                         player = player,
+                        audioOutput = audioOutput,
                         viewModel = viewModel,
                     )
                 }
@@ -195,6 +202,7 @@ fun WearPodApp(viewModel: WearPodViewModel) {
                         screen = targetScreen,
                         snapshot = snapshot,
                         player = player,
+                        audioOutput = audioOutput,
                         volume = volume,
                         viewModel = viewModel,
                         showNavigation = !isBackground,
@@ -210,12 +218,14 @@ private fun RootScreenContent(
     screen: WearPodScreen,
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     player: PlayerSnapshot,
+    audioOutput: AudioOutputSnapshot,
     viewModel: WearPodViewModel,
 ) {
     when (screen) {
         WearPodScreen.Home -> HomeScreen(
             snapshot = snapshot,
             player = player,
+            audioOutput = audioOutput,
             onContinue = viewModel::playContinueEpisode,
             onTogglePlayback = viewModel::togglePlayPause,
             onOpenPlayer = viewModel::openPlayer,
@@ -244,6 +254,8 @@ private fun RootScreenContent(
             onPlay = { episode -> viewModel.playEpisode(episode.subscriptionId, episode.id) },
             onDelete = viewModel::queueEpisodeDownload,
             onClear = viewModel::clearDownloads,
+            onClearCompleted = viewModel::clearCompletedDownloads,
+            onClearSubscription = viewModel::clearDownloadsForSubscription,
             onOpenSettings = viewModel::openDownloadSettings,
         )
 
@@ -256,6 +268,7 @@ private fun ScreenContent(
     screen: WearPodScreen,
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     player: PlayerSnapshot,
+    audioOutput: AudioOutputSnapshot,
     volume: VolumeSnapshot,
     viewModel: WearPodViewModel,
     showNavigation: Boolean,
@@ -268,6 +281,7 @@ private fun ScreenContent(
             screen = screen,
             snapshot = snapshot,
             player = player,
+            audioOutput = audioOutput,
             viewModel = viewModel,
         )
 
@@ -289,6 +303,7 @@ private fun ScreenContent(
             onSetBackgroundAutoDownload = viewModel::setBackgroundAutoDownload,
             onSetBackgroundRefreshEnabled = viewModel::setBackgroundRefreshEnabled,
             onSetBackgroundRefreshInterval = viewModel::setBackgroundRefreshInterval,
+            onSetAutoDeletePlayedDownloads = viewModel::setAutoDeletePlayedDownloads,
         )
 
         is WearPodScreen.PodcastDetail -> {
@@ -327,6 +342,7 @@ private fun ScreenContent(
             playerTitle = player.title,
             playerSubtitle = player.subtitle,
             playerArtworkUrl = player.artworkUrl,
+            audioOutput = audioOutput,
             playerPositionMs = player.positionMs,
             playerDurationMs = player.durationMs,
             playerSpeed = player.speed,
@@ -427,6 +443,7 @@ private fun RootScreenHeader(
 private fun HomeScreen(
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     player: PlayerSnapshot,
+    audioOutput: AudioOutputSnapshot,
     onContinue: () -> Unit,
     onTogglePlayback: () -> Unit,
     onOpenPlayer: () -> Unit,
@@ -488,6 +505,7 @@ private fun HomeScreen(
                 subtitle = cardSubtitle,
                 artworkUrl = cardArtworkUrl,
                 isPlaying = player.hasMedia && player.isPlaying,
+                audioOutput = if (player.hasMedia) audioOutput else null,
                 onPlayClick = when {
                     player.hasMedia -> onTogglePlayback
                     continueEpisode != null -> onContinue
@@ -521,6 +539,8 @@ private fun HomeScreen(
                 WatchChip(
                     title = subscription.title,
                     subtitle = latestEpisode?.title ?: "暂无节目",
+                    titleMarquee = true,
+                    subtitleMarquee = true,
                     leading = {
                         ArtworkThumb(subscription.artworkUrl, modifier = Modifier.size(40.dp))
                     },
@@ -545,20 +565,26 @@ private fun HomePlaybackCard(
     subtitle: String,
     artworkUrl: String?,
     isPlaying: Boolean,
+    audioOutput: AudioOutputSnapshot?,
     onPlayClick: () -> Unit,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
+            .height(88.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0x66FF7B5B), WearPodSurface),
+                    colors = listOf(
+                        Color(0xFF1D1821),
+                        Color(0xFF131019),
+                    ),
                 ),
             )
+            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
-            .height(104.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -566,7 +592,10 @@ private fun HomePlaybackCard(
                 AsyncImage(
                     model = artworkUrl,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.72f),
                     contentScale = ContentScale.Crop,
                 )
             }
@@ -574,12 +603,29 @@ private fun HomePlaybackCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.horizontalGradient(
+                        Brush.linearGradient(
                             colors = listOf(
-                                Color(0xD50B080F),
-                                Color(0xAA0B080F),
+                                Color(0xF10B080F),
+                                Color(0xD20B080F),
+                                Color(0x9A0B080F),
                                 Color(0xD90B080F),
                             ),
+                            start = androidx.compose.ui.geometry.Offset.Zero,
+                            end = androidx.compose.ui.geometry.Offset(900f, 0f),
+                        ),
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0x33FF7B5B),
+                                Color.Transparent,
+                            ),
+                            center = androidx.compose.ui.geometry.Offset(90f, 70f),
+                            radius = 180f,
                         ),
                     ),
             )
@@ -588,23 +634,56 @@ private fun HomePlaybackCard(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color(0x9C0B080F)),
+                            colors = listOf(
+                                Color(0x08FFFFFF),
+                                Color.Transparent,
+                                Color(0x880B080F),
+                            ),
                         ),
                     ),
             )
+            if (audioOutput != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 4.dp, bottom = 2.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color(0x22FFFFFF))
+                        .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(999.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Icon(
+                        imageVector = when (audioOutput.kind) {
+                            AudioOutputKind.SPEAKER -> Icons.Rounded.VolumeUp
+                            else -> Icons.Rounded.Headset
+                        },
+                        contentDescription = null,
+                        tint = WearPodTextPrimary.copy(alpha = 0.8f),
+                        modifier = Modifier.size(8.dp),
+                    )
+                    Text(
+                        text = compactAudioOutputLabel(audioOutput),
+                        color = WearPodTextPrimary.copy(alpha = 0.8f),
+                        fontSize = 6.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
-                                colors = listOf(Color(0xFFFF9B84), WearPodPrimary),
+                                colors = listOf(Color(0xFFFFAA93), WearPodPrimary),
                             ),
                         )
                         .clickable(onClick = onPlayClick),
@@ -614,10 +693,10 @@ private fun HomePlaybackCard(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = WearPodBackground,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Center,
@@ -628,19 +707,22 @@ private fun HomePlaybackCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .basicMarquee(iterations = Int.MAX_VALUE),
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip,
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = subtitle,
                         color = WearPodTextMuted,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = if (audioOutput != null) 52.dp else 0.dp),
                     )
                 }
             }
@@ -710,7 +792,7 @@ private fun SubscriptionsScreen(
         item {
             WatchChip(
                 title = "导入 RSS",
-                subtitle = "添加新的播客订阅源",
+                subtitle = "新增订阅源",
                 prominent = true,
                 leading = {
                     Icon(
@@ -780,6 +862,8 @@ private fun SubscriptionsScreen(
                         subscription.lastRefreshError ?: "刷新失败"
                     },
                     prominent = true,
+                    titleMarquee = true,
+                    subtitleMarquee = true,
                     leading = {
                         Box(
                             modifier = Modifier
@@ -831,6 +915,8 @@ private fun SubscriptionsScreen(
                         title = subscription.title,
                         subtitle = if (isPendingUnsubscribe) "点按确认取消订阅" else latestEpisode?.title ?: "暂无新节目",
                         prominent = isPendingUnsubscribe,
+                        titleMarquee = true,
+                        subtitleMarquee = !isPendingUnsubscribe,
                         onLongClick = {
                             if (isPendingUnsubscribe) {
                                 onDismissUnsubscribeRequest()
@@ -1326,8 +1412,8 @@ private fun PodcastDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(152.dp)
-                        .clip(RoundedCornerShape(30.dp))
+                        .height(128.dp)
+                        .clip(RoundedCornerShape(28.dp))
                         .background(WearPodSurface),
                 ) {
                     AsyncImage(
@@ -1342,9 +1428,9 @@ private fun PodcastDetailScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0x2207060B),
-                                        Color(0x8A07060B),
-                                        Color(0xF207060B),
+                                        Color(0x1807060B),
+                                        Color(0x7607060B),
+                                        Color(0xF007060B),
                                     ),
                                 ),
                             ),
@@ -1359,11 +1445,10 @@ private fun PodcastDetailScreen(
                                 ),
                             ),
                     )
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1374,12 +1459,15 @@ private fun PodcastDetailScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(999.dp))
                                     .background(Color(0xA6131017))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    .padding(horizontal = 9.dp, vertical = 5.dp),
                             ) {
                                 WatchTimeHeader(color = WearPodPrimary)
                             }
                             if (showNavigation) {
-                                MiniIconButton(onClick = onToggleFavorite) {
+                                MiniIconButton(
+                                    modifier = Modifier.size(42.dp),
+                                    onClick = onToggleFavorite,
+                                ) {
                                     val isFavorite = snapshot.favoriteSubscriptionIds.contains(subscription.id)
                                     Icon(
                                         imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -1389,20 +1477,29 @@ private fun PodcastDetailScreen(
                                 }
                             }
                         }
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(bottom = 8.dp),
+                        ) {
                             Text(
                                 text = subscription.title,
                                 color = WearPodTextPrimary,
-                                fontSize = 28.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .basicMarquee(iterations = Int.MAX_VALUE),
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "共 ${allEpisodesCount} 期",
                                 color = WearPodTextMuted,
-                                fontSize = 13.sp,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -1418,14 +1515,16 @@ private fun PodcastDetailScreen(
                         text = "随机播",
                         background = WearPodPrimary,
                         foreground = WearPodBackground,
-                        textSize = 12.sp,
+                        textSize = 10.sp,
+                        horizontalPadding = 12.dp,
+                        verticalPadding = 9.dp,
                         modifier = Modifier.weight(1f),
                         leading = {
                             Icon(
                                 Icons.Rounded.Shuffle,
                                 contentDescription = null,
                                 tint = WearPodBackground,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(14.dp),
                             )
                         },
                         onClick = onPlayRandom,
@@ -1434,14 +1533,16 @@ private fun PodcastDetailScreen(
                         text = "下载全部",
                         background = Color(0xFF17141D),
                         foreground = WearPodTextPrimary,
-                        textSize = 12.sp,
+                        textSize = 10.sp,
+                        horizontalPadding = 12.dp,
+                        verticalPadding = 9.dp,
                         modifier = Modifier.weight(1f),
                         leading = {
                             Icon(
                                 Icons.Rounded.Download,
                                 contentDescription = null,
                                 tint = WearPodTextPrimary,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(14.dp),
                             )
                         },
                         onClick = onDownloadAll,
@@ -1457,18 +1558,21 @@ private fun PodcastDetailScreen(
                     WatchCompactChip(
                         text = "全部",
                         modifier = Modifier.weight(1f),
+                        textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.ALL,
                         onClick = { onEpisodeFilterChange(EpisodeFilter.ALL) },
                     )
                     WatchCompactChip(
                         text = "未播",
                         modifier = Modifier.weight(1f),
+                        textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.UNPLAYED,
                         onClick = { onEpisodeFilterChange(EpisodeFilter.UNPLAYED) },
                     )
                     WatchCompactChip(
                         text = "已下载",
                         modifier = Modifier.weight(1f),
+                        textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.DOWNLOADED,
                         onClick = { onEpisodeFilterChange(EpisodeFilter.DOWNLOADED) },
                     )
@@ -1476,103 +1580,122 @@ private fun PodcastDetailScreen(
             }
 
             items(episodes, key = { it.id }) { episode ->
+                val statusLabel = when (episode.downloadState) {
+                    DownloadState.DOWNLOADED -> "已缓存"
+                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> "缓存中"
+                    DownloadState.FAILED -> "下载失败"
+                    else -> if (episode.isCompleted) "已播放" else "未播放"
+                }
+                val statusColor = when (episode.downloadState) {
+                    DownloadState.DOWNLOADED -> WearPodSuccess
+                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> WearPodAccent
+                    DownloadState.FAILED -> WearPodPrimary
+                    else -> WearPodTextMuted
+                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
+                        .clip(RoundedCornerShape(22.dp))
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFF1B1720), Color(0xFF131118)),
+                                colors = listOf(
+                                    Color(0xFF1A171F),
+                                    Color(0xFF131019),
+                                    Color(0xFF0F0D13),
+                                ),
                             ),
                         )
+                        .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(22.dp))
                         .clickable { onPlayEpisode(episode) }
-                        .padding(horizontal = 14.dp, vertical = 13.dp),
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                        when (episode.downloadState) {
-                            DownloadState.DOWNLOADED -> EpisodeBadge("离线", WearPodSuccess)
-                            DownloadState.QUEUED, DownloadState.DOWNLOADING -> EpisodeBadge("下载中", WearPodAccent)
-                            DownloadState.FAILED -> EpisodeBadge("失败", WearPodPrimary)
-                            else -> if (episode.isCompleted) EpisodeBadge("已播", WearPodTextMuted) else EpisodeBadge("新", Color(0xFFD56BFF))
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        MiniIconButton(
-                            modifier = Modifier.size(32.dp),
-                            onClick = { onTogglePlayed(episode) },
-                        ) {
-                            Icon(
-                                imageVector = if (episode.isCompleted) Icons.Rounded.Undo else Icons.Rounded.Done,
-                                contentDescription = null,
-                                tint = if (episode.isCompleted) WearPodTextMuted else WearPodSuccess,
-                                modifier = Modifier.size(15.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        MiniIconButton(
-                            modifier = Modifier.size(32.dp),
-                            onClick = { onToggleDownload(episode) },
-                        ) {
-                            Icon(
-                                imageVector = if (episode.downloadState == DownloadState.NOT_DOWNLOADED ||
-                                    episode.downloadState == DownloadState.FAILED
-                                ) {
-                                    Icons.Rounded.Download
-                                } else {
-                                    Icons.Rounded.DeleteOutline
-                                },
-                                contentDescription = null,
-                                tint = WearPodTextPrimary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        episode.title,
-                        color = WearPodTextPrimary,
-                        fontSize = 16.sp,
-                        lineHeight = 19.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "${formatDurationShort(episode.durationSeconds)} • ${formatRelativeTime(episode.publishedAtEpochMillis)}",
-                            color = WearPodTextMuted,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
                             when (episode.downloadState) {
-                                DownloadState.DOWNLOADED -> "已缓存"
-                                DownloadState.QUEUED, DownloadState.DOWNLOADING -> "缓存中"
-                                DownloadState.FAILED -> "下载失败"
-                                else -> if (episode.isCompleted) "已播放" else "未播放"
-                            },
-                            color = when (episode.downloadState) {
-                                DownloadState.DOWNLOADED -> WearPodSuccess
-                                DownloadState.QUEUED, DownloadState.DOWNLOADING -> WearPodAccent
-                                DownloadState.FAILED -> WearPodPrimary
-                                else -> WearPodTextMuted
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
+                                DownloadState.DOWNLOADED -> EpisodeBadge("离线", WearPodSuccess)
+                                DownloadState.QUEUED, DownloadState.DOWNLOADING -> EpisodeBadge("下载中", WearPodAccent)
+                                DownloadState.FAILED -> EpisodeBadge("失败", WearPodPrimary)
+                                else -> if (episode.isCompleted) EpisodeBadge("已播", WearPodTextMuted) else EpisodeBadge("新", Color(0xFFD56BFF))
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = statusLabel,
+                                color = statusColor,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            MiniIconButton(
+                                modifier = Modifier.size(28.dp),
+                                onClick = { onTogglePlayed(episode) },
+                            ) {
+                                Icon(
+                                    imageVector = if (episode.isCompleted) Icons.Rounded.Undo else Icons.Rounded.Done,
+                                    contentDescription = null,
+                                    tint = if (episode.isCompleted) WearPodTextMuted else WearPodSuccess,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(3.dp))
+                            MiniIconButton(
+                                modifier = Modifier.size(28.dp),
+                                onClick = { onToggleDownload(episode) },
+                            ) {
+                                Icon(
+                                    imageVector = if (episode.downloadState == DownloadState.NOT_DOWNLOADED ||
+                                        episode.downloadState == DownloadState.FAILED
+                                    ) {
+                                        Icons.Rounded.Download
+                                    } else {
+                                        Icons.Rounded.DeleteOutline
+                                    },
+                                    contentDescription = null,
+                                    tint = WearPodTextPrimary,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(7.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ArtworkThumb(
+                                imageUrl = episode.artworkUrl,
+                                modifier = Modifier.size(38.dp),
+                            )
+                            Spacer(modifier = Modifier.width(9.dp))
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    episode.title,
+                                    color = WearPodTextPrimary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .basicMarquee(iterations = Int.MAX_VALUE),
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    "${formatDurationShort(episode.durationSeconds)} • ${formatRelativeTime(episode.publishedAtEpochMillis)}",
+                                    color = WearPodTextMuted,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
-}
 
 @Composable
 private fun PlayerScreen(
@@ -1580,6 +1703,7 @@ private fun PlayerScreen(
     playerTitle: String,
     playerSubtitle: String,
     playerArtworkUrl: String?,
+    audioOutput: AudioOutputSnapshot,
     playerPositionMs: Long,
     playerDurationMs: Long,
     playerSpeed: Float,
@@ -1882,7 +2006,12 @@ private fun PlayerScreen(
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .align(Alignment.Center),
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    alpha = centerButtonAlpha
+                    scaleX = centerButtonScale
+                    scaleY = centerButtonScale
+                },
             contentAlignment = Alignment.Center,
         ) {
             CircularProgressRing(
@@ -1895,11 +2024,6 @@ private fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .size(46.dp)
-                    .graphicsLayer {
-                        alpha = centerButtonAlpha
-                        scaleX = centerButtonScale
-                        scaleY = centerButtonScale
-                    }
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
@@ -1978,8 +2102,11 @@ private fun DownloadsScreen(
     onPlay: (Episode) -> Unit,
     onDelete: (Episode) -> Unit,
     onClear: () -> Unit,
+    onClearCompleted: () -> Unit,
+    onClearSubscription: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val context = LocalContext.current
     val queuedEpisodes = snapshot.episodes
         .filter { episode ->
             episode.downloadState == DownloadState.QUEUED || episode.downloadState == DownloadState.DOWNLOADING
@@ -1989,11 +2116,30 @@ private fun DownloadsScreen(
                 .thenByDescending { it.publishedAtEpochMillis ?: 0L },
         )
     val downloadedEpisodes = snapshot.episodes.filter { it.downloadState == DownloadState.DOWNLOADED }
+    val completedDownloadedEpisodes = downloadedEpisodes.filter { it.isCompleted }
     val failedEpisodes = snapshot.episodes
         .filter { it.downloadState == DownloadState.FAILED }
         .sortedByDescending { it.publishedAtEpochMillis ?: 0L }
     val usedBytes = downloadedEpisodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L }
+    val availableBytes = context.filesDir.usableSpace.coerceAtLeast(0L)
     val maxBytes = 1_500L * 1024L * 1024L
+    val storageWarning = when {
+        availableBytes < 256L * 1024L * 1024L -> "剩余空间偏低，建议尽快清理缓存"
+        usedBytes >= (maxBytes * 0.85f).toLong() -> "离线缓存较多，可以删掉已播节目"
+        else -> null
+    }
+    val downloadedGroups = downloadedEpisodes
+        .groupBy { it.subscriptionId }
+        .mapNotNull { (subscriptionId, episodes) ->
+            val subscription = snapshot.subscriptions.firstOrNull { it.id == subscriptionId } ?: return@mapNotNull null
+            DownloadedSubscriptionGroup(
+                subscriptionId = subscriptionId,
+                title = subscription.title,
+                episodeCount = episodes.size,
+                totalBytes = episodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L },
+            )
+        }
+        .sortedWith(compareByDescending<DownloadedSubscriptionGroup> { it.episodeCount }.thenBy { it.title.lowercase() })
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -2049,10 +2195,24 @@ private fun DownloadsScreen(
                     modifier = Modifier.weight(1f),
                 )
                 WatchMetricPill(
-                    label = "空间",
-                    value = formatBytes(usedBytes),
+                    label = "可用",
+                    value = formatBytes(availableBytes),
                     modifier = Modifier.weight(1f),
                 )
+            }
+        }
+
+        if (storageWarning != null) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    WatchCompactChip(
+                        text = storageWarning,
+                        highlighted = true,
+                    )
+                }
             }
         }
 
@@ -2178,12 +2338,13 @@ private fun DownloadsScreen(
             }
 
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     WatchCompactChip(
-                        text = "清空缓存",
+                        text = "清空全部",
                         leading = {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
@@ -2193,6 +2354,66 @@ private fun DownloadsScreen(
                             )
                         },
                         onClick = onClear,
+                    )
+                    if (completedDownloadedEpisodes.isNotEmpty()) {
+                        WatchCompactChip(
+                            text = "删除已播(${completedDownloadedEpisodes.size})",
+                            leading = {
+                                Icon(
+                                    Icons.Rounded.Done,
+                                    contentDescription = null,
+                                    tint = WearPodPrimary,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            },
+                            onClick = onClearCompleted,
+                        )
+                    }
+                }
+            }
+
+            if (downloadedGroups.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        WatchCompactChip(
+                            text = "按播客清理",
+                            highlighted = true,
+                        )
+                    }
+                }
+
+                items(downloadedGroups, key = { "cleanup-${it.subscriptionId}" }) { group ->
+                    WatchChip(
+                        title = group.title,
+                        subtitle = "${group.episodeCount} 集 • ${formatBytes(group.totalBytes)}",
+                        leading = {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(WearPodSurfaceSoft),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.DeleteOutline,
+                                    contentDescription = null,
+                                    tint = WearPodPrimary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
+                        trailing = {
+                            Icon(
+                                Icons.Rounded.DeleteOutline,
+                                contentDescription = null,
+                                tint = WearPodPrimary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = { onClearSubscription(group.subscriptionId) },
                     )
                 }
             }
@@ -2240,6 +2461,7 @@ private fun DownloadSettingsScreen(
     onSetBackgroundAutoDownload: (Boolean) -> Unit,
     onSetBackgroundRefreshEnabled: (Boolean) -> Unit,
     onSetBackgroundRefreshInterval: (Int) -> Unit,
+    onSetAutoDeletePlayedDownloads: (Boolean) -> Unit,
 ) {
     val settings = snapshot.downloadSettings
     LazyColumn(
@@ -2255,12 +2477,12 @@ private fun DownloadSettingsScreen(
             }
         }
         item {
-            SectionTitle(title = "下载与刷新", subtitle = "控制网络、下载与后台更新")
+            SectionTitle(title = "下载与刷新", subtitle = "网络与后台")
         }
         item {
             WatchChip(
                 title = "仅 Wi‑Fi 下载",
-                subtitle = if (settings.wifiOnly) "已开启" else "允许任意网络",
+                subtitle = if (settings.wifiOnly) "已开启" else "任意网络",
                 prominent = settings.wifiOnly,
                 leading = {
                     Box(
@@ -2284,7 +2506,7 @@ private fun DownloadSettingsScreen(
         item {
             WatchChip(
                 title = "后台自动下载",
-                subtitle = if (settings.backgroundAutoDownloadEnabled) "刷新后自动排队" else "仅手动下载",
+                subtitle = if (settings.backgroundAutoDownloadEnabled) "刷新后自动下" else "仅手动下载",
                 prominent = settings.backgroundAutoDownloadEnabled,
                 leading = {
                     Box(
@@ -2303,6 +2525,30 @@ private fun DownloadSettingsScreen(
                     }
                 },
                 onClick = { onSetBackgroundAutoDownload(!settings.backgroundAutoDownloadEnabled) },
+            )
+        }
+        item {
+            WatchChip(
+                title = "自动清理已播",
+                subtitle = if (settings.autoDeletePlayedDownloads) "已播后自动删" else "保留已播缓存",
+                prominent = settings.autoDeletePlayedDownloads,
+                leading = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (settings.autoDeletePlayedDownloads) WearPodPrimary else WearPodSurfaceSoft),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Done,
+                            contentDescription = null,
+                            tint = if (settings.autoDeletePlayedDownloads) WearPodBackground else WearPodTextPrimary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                },
+                onClick = { onSetAutoDeletePlayedDownloads(!settings.autoDeletePlayedDownloads) },
             )
         }
         item {
@@ -2340,7 +2586,7 @@ private fun DownloadSettingsScreen(
             WatchChip(
                 title = "后台定时刷新",
                 subtitle = if (settings.backgroundRefreshEnabled) {
-                    "每 ${settings.backgroundRefreshIntervalHours} 小时检查新节目"
+                    "每 ${settings.backgroundRefreshIntervalHours}H 刷新"
                 } else {
                     "已关闭"
                 },
@@ -2380,7 +2626,7 @@ private fun DownloadSettingsScreen(
             ) {
                 listOf(6, 12, 24).forEach { hours ->
                     WatchCompactChip(
-                        text = "${hours} 小时",
+                        text = "${hours}H",
                         modifier = Modifier.weight(1f),
                         highlighted = settings.backgroundRefreshEnabled && settings.backgroundRefreshIntervalHours == hours,
                         onClick = { onSetBackgroundRefreshInterval(hours) },
@@ -2389,6 +2635,21 @@ private fun DownloadSettingsScreen(
             }
         }
     }
+}
+
+private data class DownloadedSubscriptionGroup(
+    val subscriptionId: String,
+    val title: String,
+    val episodeCount: Int,
+    val totalBytes: Long,
+)
+
+private fun compactAudioOutputLabel(audioOutput: AudioOutputSnapshot): String = when (audioOutput.kind) {
+    AudioOutputKind.SPEAKER -> "外放"
+    AudioOutputKind.BLUETOOTH -> "蓝牙"
+    AudioOutputKind.WIRED -> "有线"
+    AudioOutputKind.REMOTE -> "外部"
+    AudioOutputKind.OTHER -> audioOutput.label.ifBlank { "输出" }
 }
 
 @Composable

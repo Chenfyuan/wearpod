@@ -64,6 +64,7 @@ data class DownloadSettings(
     val backgroundAutoDownloadEnabled: Boolean = true,
     val backgroundRefreshEnabled: Boolean = true,
     val backgroundRefreshIntervalHours: Int = 6,
+    val autoDeletePlayedDownloads: Boolean = false,
 )
 
 data class AppSnapshot(

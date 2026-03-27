@@ -173,10 +173,12 @@ class WearPodRepository(
 
     suspend fun setEpisodeCompleted(episodeId: String, completed: Boolean) {
         updateEpisode(episodeId) { episode ->
-            episode.copy(
-                isCompleted = completed,
-                lastPlayedPositionMs = 0L,
-                lastPlayedAtEpochMillis = if (completed) System.currentTimeMillis() else episode.lastPlayedAtEpochMillis,
+            applyCompletedState(
+                episode = episode,
+                completed = completed,
+                settings = mutableSnapshot.value.downloadSettings,
+                now = System.currentTimeMillis(),
+                resetPlaybackPosition = true,
             )
         }
     }
@@ -278,6 +280,73 @@ class WearPodRepository(
         }
     }
 
+    suspend fun clearCompletedDownloads(): Int {
+        var removedCount = 0
+        mutate { snapshot ->
+            val completedDownloadIds = snapshot.episodes
+                .filter { it.isCompleted && it.downloadState == DownloadState.DOWNLOADED }
+                .mapTo(mutableSetOf()) { it.id }
+            removedCount = completedDownloadIds.size
+            if (completedDownloadIds.isEmpty()) return@mutate snapshot
+
+            snapshot.episodes
+                .filter { it.id in completedDownloadIds }
+                .forEach { episode ->
+                    episode.downloadedFilePath?.let { File(it).delete() }
+                }
+
+            snapshot.copy(
+                episodes = snapshot.episodes.map { episode ->
+                    if (episode.id in completedDownloadIds) {
+                        episode.copy(
+                            downloadState = DownloadState.NOT_DOWNLOADED,
+                            downloadedFilePath = null,
+                            downloadedBytes = 0L,
+                        )
+                    } else {
+                        episode
+                    }
+                },
+            )
+        }
+        return removedCount
+    }
+
+    suspend fun clearDownloadsForSubscription(subscriptionId: String): Int {
+        var removedCount = 0
+        mutate { snapshot ->
+            val targetIds = snapshot.episodes
+                .filter {
+                    it.subscriptionId == subscriptionId &&
+                        it.downloadState == DownloadState.DOWNLOADED
+                }
+                .mapTo(mutableSetOf()) { it.id }
+            removedCount = targetIds.size
+            if (targetIds.isEmpty()) return@mutate snapshot
+
+            snapshot.episodes
+                .filter { it.id in targetIds }
+                .forEach { episode ->
+                    episode.downloadedFilePath?.let { File(it).delete() }
+                }
+
+            snapshot.copy(
+                episodes = snapshot.episodes.map { episode ->
+                    if (episode.id in targetIds) {
+                        episode.copy(
+                            downloadState = DownloadState.NOT_DOWNLOADED,
+                            downloadedFilePath = null,
+                            downloadedBytes = 0L,
+                        )
+                    } else {
+                        episode
+                    }
+                },
+            )
+        }
+        return removedCount
+    }
+
     suspend fun updatePlayback(
         episodeId: String,
         positionMs: Long,
@@ -291,10 +360,15 @@ class WearPodRepository(
                 if (episode.id != episodeId) {
                     episode
                 } else {
-                    episode.copy(
-                        lastPlayedPositionMs = if (isCompleted) 0L else positionMs,
-                        lastPlayedAtEpochMillis = now,
-                        isCompleted = isCompleted,
+                    applyCompletedState(
+                        episode = episode.copy(
+                            lastPlayedPositionMs = if (isCompleted) 0L else positionMs,
+                            lastPlayedAtEpochMillis = now,
+                        ),
+                        completed = isCompleted,
+                        settings = snapshot.downloadSettings,
+                        now = now,
+                        resetPlaybackPosition = false,
                     )
                 }
             }
@@ -350,6 +424,8 @@ class WearPodRepository(
                 else -> 0L
             }
         }
+
+    fun storageAvailableBytes(): Long = appContext.filesDir.usableSpace.coerceAtLeast(0L)
 
     private suspend fun upsertFeed(
         feedUrl: String,
@@ -475,5 +551,30 @@ class WearPodRepository(
         return buildString {
             bytes.take(10).forEach { byte -> append("%02x".format(byte)) }
         }
+    }
+
+    private fun applyCompletedState(
+        episode: Episode,
+        completed: Boolean,
+        settings: DownloadSettings,
+        now: Long,
+        resetPlaybackPosition: Boolean,
+    ): Episode {
+        val shouldDeleteDownload = completed &&
+            settings.autoDeletePlayedDownloads &&
+            episode.downloadState == DownloadState.DOWNLOADED
+
+        if (shouldDeleteDownload) {
+            episode.downloadedFilePath?.let { File(it).delete() }
+        }
+
+        return episode.copy(
+            isCompleted = completed,
+            lastPlayedPositionMs = if (completed && resetPlaybackPosition) 0L else episode.lastPlayedPositionMs,
+            lastPlayedAtEpochMillis = if (completed) now else episode.lastPlayedAtEpochMillis,
+            downloadState = if (shouldDeleteDownload) DownloadState.NOT_DOWNLOADED else episode.downloadState,
+            downloadedFilePath = if (shouldDeleteDownload) null else episode.downloadedFilePath,
+            downloadedBytes = if (shouldDeleteDownload) 0L else episode.downloadedBytes,
+        )
     }
 }

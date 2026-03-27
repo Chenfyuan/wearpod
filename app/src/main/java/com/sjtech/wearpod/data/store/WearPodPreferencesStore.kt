@@ -51,6 +51,7 @@ class WearPodPreferencesStore(context: Context) {
                 backgroundAutoDownloadEnabled = preferences[BACKGROUND_AUTO_DOWNLOAD_ENABLED] ?: true,
                 backgroundRefreshEnabled = preferences[BACKGROUND_REFRESH_ENABLED] ?: true,
                 backgroundRefreshIntervalHours = (preferences[BACKGROUND_REFRESH_INTERVAL_HOURS] ?: 6).coerceIn(6, 24),
+                autoDeletePlayedDownloads = preferences[AUTO_DELETE_PLAYED_DOWNLOADS] ?: false,
             ),
             sleepTimer = SleepTimer(
                 endsAtEpochMillis = preferences[SLEEP_TIMER_ENDS_AT],
@@ -77,6 +78,7 @@ class WearPodPreferencesStore(context: Context) {
             preferences[BACKGROUND_AUTO_DOWNLOAD_ENABLED] = snapshot.downloadSettings.backgroundAutoDownloadEnabled
             preferences[BACKGROUND_REFRESH_ENABLED] = snapshot.downloadSettings.backgroundRefreshEnabled
             preferences[BACKGROUND_REFRESH_INTERVAL_HOURS] = snapshot.downloadSettings.backgroundRefreshIntervalHours
+            preferences[AUTO_DELETE_PLAYED_DOWNLOADS] = snapshot.downloadSettings.autoDeletePlayedDownloads
 
             snapshot.sleepTimer.endsAtEpochMillis?.let {
                 preferences[SLEEP_TIMER_ENDS_AT] = it
@@ -111,6 +113,7 @@ private val AUTO_DOWNLOAD_LATEST_COUNT = intPreferencesKey("auto_download_latest
 private val BACKGROUND_AUTO_DOWNLOAD_ENABLED = booleanPreferencesKey("background_auto_download_enabled")
 private val BACKGROUND_REFRESH_ENABLED = booleanPreferencesKey("background_refresh_enabled")
 private val BACKGROUND_REFRESH_INTERVAL_HOURS = intPreferencesKey("background_refresh_interval_hours")
+private val AUTO_DELETE_PLAYED_DOWNLOADS = booleanPreferencesKey("auto_delete_played_downloads")
 private val SLEEP_TIMER_ENDS_AT = longPreferencesKey("sleep_timer_ends_at")
 private val SLEEP_TIMER_PRESET_MINUTES = intPreferencesKey("sleep_timer_preset_minutes")
 private val MIGRATION_COMPLETE = booleanPreferencesKey("migration_complete")

@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.syncVolume()
+        viewModel.syncAudioOutput()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -214,6 +215,8 @@ fun PillButton(
     background: Color,
     foreground: Color = WearPodTextPrimary,
     textSize: androidx.compose.ui.unit.TextUnit = 13.sp,
+    horizontalPadding: Dp = 16.dp,
+    verticalPadding: Dp = 10.dp,
     leading: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
@@ -226,7 +229,7 @@ fun PillButton(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -313,6 +316,8 @@ fun WatchChip(
     subtitle: String? = null,
     modifier: Modifier = Modifier,
     prominent: Boolean = false,
+    titleMarquee: Boolean = false,
+    subtitleMarquee: Boolean = false,
     leadingOnClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     leading: @Composable BoxScope.() -> Unit,
@@ -386,7 +391,14 @@ fun WatchChip(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = if (subtitle == null) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = if (titleMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (titleMarquee) {
+                    Modifier
+                        .fillMaxWidth()
+                        .basicMarquee(iterations = Int.MAX_VALUE)
+                } else {
+                    Modifier
+                },
             )
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -395,7 +407,14 @@ fun WatchChip(
                     color = WearPodTextMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    overflow = if (subtitleMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (subtitleMarquee) {
+                        Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    } else {
+                        Modifier
+                    },
                 )
             }
         }
@@ -415,6 +434,7 @@ fun WatchCompactChip(
     text: String,
     modifier: Modifier = Modifier,
     highlighted: Boolean = false,
+    textSize: androidx.compose.ui.unit.TextUnit = 11.sp,
     leading: (@Composable RowScope.() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
@@ -462,7 +482,7 @@ fun WatchCompactChip(
         Text(
             text = text,
             color = if (highlighted) WearPodPrimarySoft else WearPodTextMuted,
-            fontSize = 11.sp,
+            fontSize = textSize,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

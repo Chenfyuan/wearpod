@@ -112,6 +112,7 @@ class LegacySnapshotFileStore(context: Context) {
             backgroundRefreshEnabled = downloadSettingsJson.optBoolean("backgroundRefreshEnabled", true),
             backgroundRefreshIntervalHours = downloadSettingsJson.optInt("backgroundRefreshIntervalHours", 6)
                 .coerceIn(6, 24),
+            autoDeletePlayedDownloads = downloadSettingsJson.optBoolean("autoDeletePlayedDownloads", false),
         )
 
         val sleepTimerJson = json.optJSONObject("sleepTimer") ?: JSONObject()
