@@ -1512,7 +1512,7 @@ private fun PodcastDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     PillButton(
-                        text = "随机播",
+                        text = "随机",
                         background = WearPodPrimary,
                         foreground = WearPodBackground,
                         textSize = 10.sp,
@@ -1530,7 +1530,7 @@ private fun PodcastDetailScreen(
                         onClick = onPlayRandom,
                     )
                     PillButton(
-                        text = "下载全部",
+                        text = "全部",
                         background = Color(0xFF17141D),
                         foreground = WearPodTextPrimary,
                         textSize = 10.sp,
@@ -1888,16 +1888,65 @@ private fun PlayerScreen(
                 }
                 items(queue, key = { it.episodeId }) { item ->
                     val isCurrent = queue.indexOfFirst { it.episodeId == item.episodeId } == currentQueueIndex
-                    WatchChip(
-                        title = item.title.ifBlank { "未命名节目" },
-                        subtitle = if (isCurrent) "正在播放" else item.subtitle.ifBlank { "点按切换" },
-                        prominent = isCurrent,
-                        leading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF19161E), WearPodSurface),
+                                ),
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isCurrent) Color(0x44FF7B5B) else Color(0x24FFFFFF),
+                                shape = RoundedCornerShape(24.dp),
+                            )
+                            .clickable { onPlayQueueItem(item.episodeId) },
+                    ) {
+                        AsyncImage(
+                            model = item.artworkUrl,
+                            contentDescription = null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xE615121A),
+                                            Color(0xB0141119),
+                                            Color(0x8A141118),
+                                        ),
+                                    ),
+                                ),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xF215121A),
+                                            Color(0xC1141119),
+                                            Color(0x66141119),
+                                        ),
+                                    ),
+                                ),
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(if (isCurrent) WearPodPrimary else WearPodSurfaceSoft),
+                                    .background(if (isCurrent) WearPodPrimary else Color(0xCC1E1B24)),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -1907,9 +1956,38 @@ private fun PlayerScreen(
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
-                        },
-                        onClick = { onPlayQueueItem(item.episodeId) },
-                    )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title.ifBlank { "未命名节目" },
+                                    color = WearPodTextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .basicMarquee(iterations = Int.MAX_VALUE),
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (isCurrent) "正在播放" else item.subtitle.ifBlank { "点按切换" },
+                                    color = if (isCurrent) WearPodPrimarySoft else WearPodTextMuted,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+                                    maxLines = 1,
+                                    overflow = if (isCurrent) TextOverflow.Ellipsis else TextOverflow.Clip,
+                                    modifier = if (isCurrent) {
+                                        Modifier.fillMaxWidth()
+                                    } else {
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .basicMarquee(iterations = Int.MAX_VALUE)
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

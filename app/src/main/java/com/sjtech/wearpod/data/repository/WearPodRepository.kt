@@ -414,6 +414,12 @@ class WearPodRepository(
     fun episode(episodeId: String): Episode? =
         mutableSnapshot.value.episodes.firstOrNull { it.id == episodeId }
 
+    fun isEpisodeAvailableOffline(episodeId: String): Boolean {
+        val episode = episode(episodeId) ?: return false
+        val localPath = episode.downloadedFilePath ?: return false
+        return episode.downloadState == DownloadState.DOWNLOADED && File(localPath).exists()
+    }
+
     fun storageUsageBytes(): Long =
         mutableSnapshot.value.episodes.sumOf { episode ->
             when {

@@ -25,7 +25,10 @@ class AppContainer(application: Application) {
     private val store = WearPodStore(application)
     private val parser = PodcastFeedParser()
     private val networkClient = FeedNetworkClient()
-    private val importRelayClient = ImportRelayClient(BuildConfig.IMPORT_RELAY_API_BASE_URL)
+    private val importRelayClient = ImportRelayClient(
+        baseUrl = BuildConfig.IMPORT_RELAY_API_BASE_URL,
+        fallbackBaseUrl = BuildConfig.IMPORT_RELAY_FALLBACK_API_BASE_URL,
+    )
 
     val repository = WearPodRepository(
         appContext = application,
@@ -41,6 +44,7 @@ class AppContainer(application: Application) {
     )
     val audioOutputController = AudioOutputController(application)
     val volumeController = VolumeController(application)
+    val networkStatusMonitor = NetworkStatusMonitor(application)
 
     val downloadScheduler = EpisodeDownloadScheduler(
         appContext = application,

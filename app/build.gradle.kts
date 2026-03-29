@@ -8,8 +8,14 @@ plugins {
 val debugImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiBaseUrlDebug") as String?)
     ?: (project.findProperty("wearpodImportRelayApiBaseUrl") as String?)
     ?: "http://10.0.2.2:8787"
+val debugImportRelayFallbackApiBaseUrl = (project.findProperty("wearpodImportRelayFallbackApiBaseUrlDebug") as String?)
+    ?: (project.findProperty("wearpodImportRelayFallbackApiBaseUrl") as String?)
+    ?: ""
 val releaseImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiBaseUrlRelease") as String?)
     ?: (project.findProperty("wearpodImportRelayApiBaseUrl") as String?)
+    ?: ""
+val releaseImportRelayFallbackApiBaseUrl = (project.findProperty("wearpodImportRelayFallbackApiBaseUrlRelease") as String?)
+    ?: (project.findProperty("wearpodImportRelayFallbackApiBaseUrl") as String?)
     ?: ""
 
 android {
@@ -36,6 +42,11 @@ android {
                 "IMPORT_RELAY_API_BASE_URL",
                 "\"$debugImportRelayApiBaseUrl\"",
             )
+            buildConfigField(
+                "String",
+                "IMPORT_RELAY_FALLBACK_API_BASE_URL",
+                "\"$debugImportRelayFallbackApiBaseUrl\"",
+            )
         }
         release {
             isMinifyEnabled = false
@@ -43,6 +54,11 @@ android {
                 "String",
                 "IMPORT_RELAY_API_BASE_URL",
                 "\"$releaseImportRelayApiBaseUrl\"",
+            )
+            buildConfigField(
+                "String",
+                "IMPORT_RELAY_FALLBACK_API_BASE_URL",
+                "\"$releaseImportRelayFallbackApiBaseUrl\"",
             )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

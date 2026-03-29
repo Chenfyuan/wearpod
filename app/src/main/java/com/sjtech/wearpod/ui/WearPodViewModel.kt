@@ -1,5 +1,6 @@
 package com.sjtech.wearpod.ui
 
+import com.sjtech.wearpod.core.NetworkStatusMonitor
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,6 +15,9 @@ import com.sjtech.wearpod.download.EpisodeDownloadScheduler
 import com.sjtech.wearpod.playback.AudioOutputController
 import com.sjtech.wearpod.playback.PlayerGateway
 import com.sjtech.wearpod.playback.VolumeController
+import java.io.IOException
+import java.net.SocketException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -66,6 +70,7 @@ class WearPodViewModel(
     private val audioOutputController: AudioOutputController,
     private val volumeController: VolumeController,
     private val downloadScheduler: EpisodeDownloadScheduler,
+    private val networkStatusMonitor: NetworkStatusMonitor,
 ) : ViewModel() {
     private val history = ArrayDeque<WearPodScreen>()
     private var phoneImportCreateJob: Job? = null
@@ -99,6 +104,7 @@ class WearPodViewModel(
     val playerState = playerGateway.playerState
     val audioOutputState = audioOutputController.state
     val volumeState = volumeController.state
+    val isOnline = networkStatusMonitor.isOnline
     val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
     fun openRoot(screen: WearPodScreen) {
@@ -129,6 +135,10 @@ class WearPodViewModel(
     fun openPhoneImport() {
         if (!repository.isPhoneImportAvailable()) {
             showBanner("手机导入服务未配置")
+            return
+        }
+        if (!isOnline.value) {
+            showBanner("当前无网络，手机导入需要联网")
             return
         }
         push(WearPodScreen.PhoneImport)
@@ -183,6 +193,10 @@ class WearPodViewModel(
     fun submitImport() {
         if (importUrl.isBlank()) {
             importError = "请输入 RSS 地址"
+            return
+        }
+        if (!isOnline.value) {
+            importError = "当前无网络，无法导入订阅"
             return
         }
         viewModelScope.launch {
@@ -403,11 +417,13 @@ class WearPodViewModel(
     fun playContinueEpisode() {
         val memory = snapshot.value.playbackMemory.lastEpisodeId ?: return
         val episode = repository.episode(memory) ?: return
+        if (!ensureEpisodeCanPlay(episode.id)) return
         playEpisode(episode.subscriptionId, episode.id)
     }
 
     fun playEpisode(subscriptionId: String, episodeId: String) {
         val subscription = repository.subscription(subscriptionId) ?: return
+        if (!ensureEpisodeCanPlay(episodeId)) return
         val episodes = repository.episodesForSubscription(subscriptionId)
         viewModelScope.launch {
             playerGateway.playEpisodes(
@@ -423,10 +439,20 @@ class WearPodViewModel(
     fun playRandom(subscriptionId: String) {
         val subscription = repository.subscription(subscriptionId) ?: return
         val episodes = repository.episodesForSubscription(subscriptionId)
-        val startEpisode = episodes.randomOrNull() ?: return
+        val playableEpisodes =
+            if (isOnline.value) {
+                episodes
+            } else {
+                episodes.filter { repository.isEpisodeAvailableOffline(it.id) }
+            }
+        if (playableEpisodes.isEmpty()) {
+            showBanner("当前无网络，请先下载离线音频")
+            return
+        }
+        val startEpisode = playableEpisodes.randomOrNull() ?: return
         viewModelScope.launch {
             playerGateway.playEpisodes(
-                episodes = episodes,
+                episodes = playableEpisodes,
                 startEpisodeId = startEpisode.id,
                 subscriptionTitle = subscription.title,
                 shuffleQueue = true,
@@ -508,6 +534,12 @@ class WearPodViewModel(
     }
 
     fun togglePlayPause() {
+        if (!playerState.value.isPlaying) {
+            val episodeId = playerState.value.episodeId
+            if (episodeId != null && !ensureEpisodeCanPlay(episodeId)) {
+                return
+            }
+        }
         viewModelScope.launch {
             playerGateway.togglePlayPause()
         }
@@ -572,6 +604,10 @@ class WearPodViewModel(
         audioOutputController.refresh()
     }
 
+    fun syncNetworkStatus() {
+        networkStatusMonitor.refresh()
+    }
+
     fun increaseVolume() {
         volumeController.increase()
     }
@@ -610,7 +646,7 @@ class WearPodViewModel(
                 .onFailure { throwable ->
                     phoneImportState = PhoneImportUiState(
                         stage = PhoneImportStage.ERROR,
-                        error = throwable.message ?: "创建二维码失败",
+                        error = friendlyImportErrorMessage(throwable, creating = true),
                     )
                 }
         }
@@ -624,7 +660,7 @@ class WearPodViewModel(
                     .getOrElse { throwable ->
                         phoneImportState = phoneImportState.copy(
                             stage = PhoneImportStage.ERROR,
-                            error = throwable.message ?: "获取导入状态失败",
+                            error = friendlyImportErrorMessage(throwable, creating = false),
                         )
                         return@launch
                     }
@@ -703,6 +739,44 @@ class WearPodViewModel(
         val candidates = repository.autoDownloadCandidates(subscriptionId)
         if (candidates.isNotEmpty()) {
             downloadScheduler.enqueueAll(candidates)
+        }
+    }
+
+    private fun ensureEpisodeCanPlay(episodeId: String): Boolean {
+        if (isOnline.value || repository.isEpisodeAvailableOffline(episodeId)) {
+            return true
+        }
+        showBanner("当前无网络，请先下载离线音频")
+        return false
+    }
+
+    private fun friendlyImportErrorMessage(
+        throwable: Throwable,
+        creating: Boolean,
+    ): String {
+        if (!isOnline.value) {
+            return if (creating) {
+                "当前无网络，手机导入需要联网"
+            } else {
+                "网络已断开，等待恢复后重试"
+            }
+        }
+        val message = throwable.message.orEmpty()
+        return when {
+            throwable is SocketException ||
+                throwable is SSLException ||
+                throwable is IOException ||
+                message.contains("reset", ignoreCase = true) ||
+                message.contains("handshake", ignoreCase = true) ||
+                message.contains("validation", ignoreCase = true) ||
+                message.contains("ssl", ignoreCase = true) ->
+                if (creating) {
+                    "手机导入服务连接失败，请稍后再试"
+                } else {
+                    "导入服务连接中断，请重试"
+                }
+
+            else -> throwable.message ?: if (creating) "创建二维码失败" else "获取导入状态失败"
         }
     }
 }

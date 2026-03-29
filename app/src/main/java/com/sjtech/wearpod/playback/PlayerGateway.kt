@@ -44,6 +44,7 @@ data class PlayerQueueItemSnapshot(
     val episodeId: String,
     val title: String,
     val subtitle: String,
+    val artworkUrl: String? = null,
 )
 
 class PlayerGateway(
@@ -211,6 +212,7 @@ class PlayerGateway(
                         episodeId = item.mediaId,
                         title = item.mediaMetadata.title?.toString().orEmpty(),
                         subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
+                        artworkUrl = item.mediaMetadata.artworkUri?.toString(),
                     ),
                 )
             }

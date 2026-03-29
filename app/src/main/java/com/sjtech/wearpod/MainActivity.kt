@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
                     audioOutputController = container.audioOutputController,
                     volumeController = container.volumeController,
                     downloadScheduler = container.downloadScheduler,
+                    networkStatusMonitor = container.networkStatusMonitor,
                 )
             }
         }
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.syncVolume()
         viewModel.syncAudioOutput()
+        viewModel.syncNetworkStatus()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
