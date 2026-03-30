@@ -7,7 +7,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sjtech.wearpod.data.model.Episode
-import com.sjtech.wearpod.data.model.ImportSuggestion
 import com.sjtech.wearpod.data.model.PhoneImportPreview
 import com.sjtech.wearpod.data.model.PhoneImportSessionStatus
 import com.sjtech.wearpod.data.repository.WearPodRepository
@@ -26,7 +25,6 @@ import kotlinx.coroutines.launch
 sealed interface WearPodScreen {
     data object Home : WearPodScreen
     data object Subscriptions : WearPodScreen
-    data object Import : WearPodScreen
     data object PhoneImport : WearPodScreen
     data object PhoneExport : WearPodScreen
     data object Downloads : WearPodScreen
@@ -102,11 +100,6 @@ class WearPodViewModel(
         get() = history.lastOrNull()
     var canGoBack by mutableStateOf(false)
         private set
-    var importUrl by mutableStateOf("")
-    var importError by mutableStateOf<String?>(null)
-        private set
-    var isImporting by mutableStateOf(false)
-        private set
     var refreshingSubscriptionId by mutableStateOf<String?>(null)
         private set
     var retryingSubscriptionId by mutableStateOf<String?>(null)
@@ -127,7 +120,6 @@ class WearPodViewModel(
     val audioOutputState = audioOutputController.state
     val volumeState = volumeController.state
     val isOnline = networkStatusMonitor.isOnline
-    val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
     fun openRoot(screen: WearPodScreen) {
         clearPhoneBridgeStateForNavigation()
@@ -153,7 +145,7 @@ class WearPodViewModel(
     }
 
     fun openImport() {
-        push(WearPodScreen.Import)
+        openPhoneImport()
     }
 
     fun openPhoneImport() {
@@ -218,37 +210,6 @@ class WearPodViewModel(
         volumeController.refresh()
         audioOutputController.refresh()
         push(WearPodScreen.Player)
-    }
-
-    fun useSuggestion(suggestion: ImportSuggestion) {
-        importUrl = suggestion.url
-        importError = null
-    }
-
-    fun submitImport() {
-        if (importUrl.isBlank()) {
-            importError = "请输入 RSS 地址"
-            return
-        }
-        if (!isOnline.value) {
-            importError = "当前无网络，无法导入订阅"
-            return
-        }
-        viewModelScope.launch {
-            isImporting = true
-            importError = null
-            try {
-                val subscription = repository.importFeed(importUrl)
-                importUrl = ""
-                isImporting = false
-                enqueueAutoDownloads(subscription.id)
-                showBanner("已导入 ${subscription.title}")
-                replaceCurrent(WearPodScreen.PodcastDetail(subscription.id))
-            } catch (throwable: Throwable) {
-                isImporting = false
-                importError = throwable.message ?: "导入失败"
-            }
-        }
     }
 
     fun retryPhoneImportSession() {

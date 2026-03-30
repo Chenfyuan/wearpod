@@ -48,11 +48,6 @@ data class PlaybackMemory(
     val updatedAtEpochMillis: Long = 0L,
 )
 
-data class ImportSuggestion(
-    val label: String,
-    val url: String,
-)
-
 data class SleepTimer(
     val endsAtEpochMillis: Long? = null,
     val presetMinutes: Int? = null,

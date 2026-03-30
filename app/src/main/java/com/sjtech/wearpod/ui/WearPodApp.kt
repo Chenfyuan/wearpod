@@ -289,10 +289,6 @@ private fun ScreenContent(
             viewModel = viewModel,
         )
 
-        WearPodScreen.Import -> ImportScreen(
-            viewModel = viewModel,
-        )
-
         WearPodScreen.PhoneImport -> PhoneImportScreen(
             state = viewModel.phoneImportState,
             onRetry = viewModel::retryPhoneImportSession,
@@ -393,7 +389,6 @@ private fun rootScreenIndex(screen: WearPodScreen): Int? = when (screen) {
 private fun screenKey(screen: WearPodScreen): String = when (screen) {
     WearPodScreen.Home -> "home"
     WearPodScreen.Subscriptions -> "subscriptions"
-    WearPodScreen.Import -> "import"
     WearPodScreen.PhoneImport -> "phone-import"
     WearPodScreen.PhoneExport -> "phone-export"
     WearPodScreen.Downloads -> "downloads"
@@ -484,7 +479,7 @@ private fun HomeScreen(
         player.hasMedia && player.title.isNotBlank() -> player.title
         activeEpisode != null -> activeEpisode.title
         continueEpisode != null -> continueEpisode.title
-        else -> "导入一个 RSS 开始收听"
+        else -> "用手机导入开始收听"
     }
     val cardArtworkUrl = when {
         player.hasMedia && !player.artworkUrl.isNullOrBlank() -> player.artworkUrl
@@ -500,7 +495,7 @@ private fun HomeScreen(
         continueEpisode != null -> {
             "${formatDurationShort(continueEpisode.durationSeconds)} • ${formatRelativeTime(continueEpisode.lastPlayedAtEpochMillis ?: continueEpisode.publishedAtEpochMillis)}"
         }
-        else -> "公开 RSS，手表独立收听"
+        else -> "扫码导入，手表独立收听"
     }
 
     LazyColumn(
@@ -794,8 +789,8 @@ private fun SubscriptionsScreen(
 
         item {
             WatchChip(
-                title = "导入 RSS",
-                subtitle = "新增订阅源",
+                title = "手机导入",
+                subtitle = "扫码导入订阅",
                 prominent = true,
                 leading = {
                     Icon(
@@ -928,7 +923,7 @@ private fun SubscriptionsScreen(
                         .padding(top = 32.dp, bottom = 24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("还没有订阅\n先导入一个 RSS 地址", color = WearPodTextMuted, textAlign = TextAlign.Center)
+                    Text("还没有订阅\n先用手机导入订阅", color = WearPodTextMuted, textAlign = TextAlign.Center)
                 }
             }
         } else {
@@ -995,141 +990,6 @@ private fun SubscriptionsScreen(
 }
 
 @Composable
-private fun ImportScreen(
-    viewModel: WearPodViewModel,
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp),
-        contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                WatchTimeHeader(color = WearPodTextMuted)
-            }
-        }
-
-        item {
-            SectionTitle(title = "导入订阅", subtitle = "手机扫码更适合手表")
-        }
-
-        item {
-            PillButton(
-                text = "手机导入（推荐）",
-                background = WearPodPrimary,
-                foreground = WearPodBackground,
-                modifier = Modifier.fillMaxWidth(),
-                leading = {
-                    Icon(
-                        Icons.Rounded.Link,
-                        contentDescription = null,
-                        tint = WearPodBackground,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                onClick = viewModel::openPhoneImport,
-            )
-        }
-
-        item {
-            Text(
-                "或手动输入 RSS",
-                color = WearPodTextMuted,
-                fontSize = 12.sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(WearPodSurface)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                androidx.compose.foundation.text.BasicTextField(
-                    value = viewModel.importUrl,
-                    onValueChange = { viewModel.importUrl = it },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = WearPodTextPrimary,
-                        fontSize = 15.sp,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    decorationBox = { innerTextField ->
-                        if (viewModel.importUrl.isBlank()) {
-                            Text("输入 RSS 地址", color = WearPodTextMuted, fontSize = 14.sp)
-                        }
-                        innerTextField()
-                    },
-                )
-            }
-        }
-
-        if (viewModel.importError != null) {
-            item {
-                Text(viewModel.importError!!, color = WearPodPrimarySoft, fontSize = 12.sp)
-            }
-        }
-
-        item {
-            PillButton(
-                text = if (viewModel.isImporting) "导入中..." else "开始导入",
-                background = WearPodPrimary,
-                foreground = WearPodBackground,
-                modifier = Modifier.fillMaxWidth(),
-                leading = {
-                    Icon(
-                        Icons.Rounded.CloudDownload,
-                        contentDescription = null,
-                        tint = WearPodBackground,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                onClick = viewModel::submitImport,
-            )
-        }
-
-        item {
-            Text("推荐源", color = WearPodTextMuted, fontSize = 13.sp)
-        }
-
-        items(viewModel.suggestions) { suggestion ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(WearPodSurfaceSoft)
-                    .clickable { viewModel.useSuggestion(suggestion) }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Rounded.Link,
-                    contentDescription = null,
-                    tint = WearPodAccent,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(suggestion.label, color = WearPodTextPrimary, fontSize = 14.sp)
-                    Text(
-                        suggestion.url,
-                        color = WearPodTextMuted,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun PhoneImportScreen(
     state: PhoneImportUiState,
     onRetry: () -> Unit,
@@ -1176,7 +1036,7 @@ private fun PhoneImportScreen(
                     PhoneImportStage.SUCCESS -> "手机导入完成"
                     PhoneImportStage.EXPIRED -> "二维码已过期"
                     PhoneImportStage.ERROR -> "生成二维码失败"
-                    else -> "用手机导入 RSS 或 OPML"
+                    else -> "用手机导入订阅或 OPML"
                 },
             )
         }
@@ -1210,7 +1070,7 @@ private fun PhoneImportScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                         }
                         Text(
-                            "用手机扫码导入 RSS 或 OPML",
+                            "用手机扫码导入订阅或 OPML",
                             color = WearPodTextPrimary,
                             fontSize = 13.sp,
                             modifier = Modifier.fillMaxWidth(),

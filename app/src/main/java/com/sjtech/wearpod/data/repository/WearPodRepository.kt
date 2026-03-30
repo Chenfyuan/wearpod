@@ -5,7 +5,6 @@ import com.sjtech.wearpod.data.model.AppSnapshot
 import com.sjtech.wearpod.data.model.DownloadSettings
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
-import com.sjtech.wearpod.data.model.ImportSuggestion
 import com.sjtech.wearpod.data.model.PhoneExportSession
 import com.sjtech.wearpod.data.model.PhoneImportPreview
 import com.sjtech.wearpod.data.model.PhoneImportResult
@@ -43,12 +42,6 @@ class WearPodRepository(
     private val mutableSnapshot = MutableStateFlow(store.read())
 
     val snapshot: StateFlow<AppSnapshot> = mutableSnapshot.asStateFlow()
-
-    val importSuggestions = listOf(
-        ImportSuggestion("铜镜", "https://feed.xyzfm.space/xpa79uvcn9lw"),
-        ImportSuggestion("Vergecast", "https://feeds.megaphone.fm/vergecast"),
-        ImportSuggestion("Planet Money", "https://feeds.npr.org/510289/podcast.xml"),
-    )
 
     suspend fun ensureImportedFeed(rawUrl: String): Subscription? {
         val normalizedUrl = normalizeUrl(rawUrl)

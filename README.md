@@ -14,7 +14,7 @@
 
 WearPod by SJTech is a standalone Wear OS podcast app prototype built for round watches first.
 
-It does not depend on a phone companion app. The current goal is simple: import feeds through a phone-assisted QR flow or direct RSS fallback, browse episodes, play audio, download episodes offline, and keep the core listening loop usable on a small wearable screen.
+It does not depend on a phone companion app. The current goal is simple: import feeds through a phone-assisted QR flow, browse episodes, play audio, download episodes offline, and keep the core listening loop usable on a small wearable screen.
 
 ## Preview
 
@@ -28,7 +28,6 @@ It does not depend on a phone companion app. The current goal is simple: import 
 
 ## What WearPod does today
 
-- Import public podcast RSS feeds directly on the watch
 - Start a phone-assisted QR import session for RSS or OPML input on mobile
 - Start a phone-assisted QR export session and download an OPML backup on mobile
 - Manage subscriptions without a phone companion app
@@ -79,7 +78,6 @@ The current app is organized around three root watch pages:
 
 Secondary screens:
 
-- `Import`
 - `Phone import`
 - `Podcast detail`
 - `Player`
@@ -304,7 +302,7 @@ This project is released under the [MIT License](./LICENSE).
 
 The next meaningful steps are:
 
-1. OPML export
+1. Stabilize the existing OPML export flow
 2. Private / paid feed support
 3. Search
 4. Better audio output and Bluetooth guidance
