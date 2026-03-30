@@ -168,6 +168,29 @@ For a real deployment, point both the app and the relay to a public HTTPS URL:
 PUBLIC_BASE_URL=https://your-relay.example.com npm start
 ```
 
+### 5. Re-deploy the relay on a server
+
+The repo includes a reusable deployment script for Docker-based servers:
+
+```bash
+bash scripts/deploy-relay.sh
+```
+
+You can also pin a specific Git ref or commit:
+
+```bash
+bash scripts/deploy-relay.sh 327d431d9a1469c588dbefd8ebae058c70e9884e
+```
+
+Useful environment overrides:
+
+```bash
+PUBLIC_BASE_URL=https://wearpod.linsblog.cn \
+HOST_BIND=127.0.0.1 \
+PORT=8787 \
+bash scripts/deploy-relay.sh main
+```
+
 ## Development notes
 
 ### Debug sample feed

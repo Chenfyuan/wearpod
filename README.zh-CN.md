@@ -169,6 +169,29 @@ npm start
 PUBLIC_BASE_URL=https://your-relay.example.com npm start
 ```
 
+### 5. 在服务器上重复部署 relay
+
+仓库里已经带了一个可复用的 Docker 部署脚本：
+
+```bash
+bash scripts/deploy-relay.sh
+```
+
+如果你想固定部署某个提交，也可以直接传 Git ref 或 commit：
+
+```bash
+bash scripts/deploy-relay.sh 327d431d9a1469c588dbefd8ebae058c70e9884e
+```
+
+常用覆盖参数示例：
+
+```bash
+PUBLIC_BASE_URL=https://wearpod.linsblog.cn \
+HOST_BIND=127.0.0.1 \
+PORT=8787 \
+bash scripts/deploy-relay.sh main
+```
+
 ## 开发说明
 
 ### Debug 示例订阅源
