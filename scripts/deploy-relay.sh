@@ -12,6 +12,7 @@ Environment variables:
   REPO_NAME        Repository name. Default: wearpod
   REPO_REF         Git ref to deploy when no positional arg is provided. Default: main
   APP_DIR          Remote relay working directory. Default: /opt/wearpod-relay/app
+  ASSET_DIR        Remote docs assets directory. Default: /opt/wearpod-relay/docs/assets
   IMAGE_NAME       Docker image name. Default: wearpod-relay:latest
   CONTAINER_NAME   Docker container name. Default: wearpod-relay
   PORT             Relay container port. Default: 8787
@@ -30,31 +31,47 @@ REPO_OWNER="${REPO_OWNER:-Chenfyuan}"
 REPO_NAME="${REPO_NAME:-wearpod}"
 REF="${1:-${REPO_REF:-main}}"
 APP_DIR="${APP_DIR:-/opt/wearpod-relay/app}"
+ASSET_DIR="${ASSET_DIR:-/opt/wearpod-relay/docs/assets}"
 IMAGE_NAME="${IMAGE_NAME:-wearpod-relay:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-wearpod-relay}"
 PORT="${PORT:-8787}"
 HOST_BIND="${HOST_BIND:-127.0.0.1}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://wearpod.linsblog.cn}"
 
-BASE_JSDELIVR="https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${REF}/relay"
-BASE_RAW="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/relay"
+BASE_JSDELIVR="https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${REF}"
+BASE_RAW="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}"
 
 fetch_file() {
-  local file="$1"
-  local url1="${BASE_JSDELIVR}/${file}"
-  local url2="${BASE_RAW}/${file}"
+  local repo_path="$1"
+  local target_path="$2"
+  local url1="${BASE_RAW}/${repo_path}"
+  local url2="${BASE_JSDELIVR}/${repo_path}"
 
-  echo "==> downloading ${file}"
-  curl -fLSo "${file}" "${url1}" || curl -fLSo "${file}" "${url2}"
+  echo "==> downloading ${repo_path}"
+  curl -fLSo "${target_path}" "${url1}" || curl -fLSo "${target_path}" "${url2}"
 }
 
-mkdir -p "${APP_DIR}"
+mkdir -p "${APP_DIR}" "${ASSET_DIR}"
 cd "${APP_DIR}"
 
-fetch_file "Dockerfile"
-fetch_file "package.json"
-fetch_file "package-lock.json"
-fetch_file "server.mjs"
+fetch_file "relay/Dockerfile" "${APP_DIR}/Dockerfile"
+fetch_file "relay/package.json" "${APP_DIR}/package.json"
+fetch_file "relay/package-lock.json" "${APP_DIR}/package-lock.json"
+fetch_file "relay/server.mjs" "${APP_DIR}/server.mjs"
+
+assets=(
+  "wearpod-cover.svg"
+  "wearpod-detail.png"
+  "wearpod-downloads.png"
+  "wearpod-home.png"
+  "wearpod-player.png"
+  "wearpod-queue.png"
+  "wearpod-subscriptions.png"
+)
+
+for asset in "${assets[@]}"; do
+  fetch_file "docs/assets/${asset}" "${ASSET_DIR}/${asset}"
+done
 
 echo "==> building image ${IMAGE_NAME}"
 docker build -t "${IMAGE_NAME}" .
