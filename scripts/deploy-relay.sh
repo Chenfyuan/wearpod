@@ -83,6 +83,7 @@ docker run -d \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
   -p "${HOST_BIND}:${PORT}:${PORT}" \
+  -v "${ASSET_DIR}:/docs/assets:ro" \
   -e "PORT=${PORT}" \
   -e "PUBLIC_BASE_URL=${PUBLIC_BASE_URL}" \
   "${IMAGE_NAME}"
@@ -104,3 +105,4 @@ echo
 echo "==> done"
 echo "deployed ref: ${REF}"
 echo "public base: ${PUBLIC_BASE_URL}"
+echo "asset dir: ${ASSET_DIR}"
