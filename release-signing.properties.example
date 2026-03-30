@@ -1,0 +1,7 @@
+# Copy this file to `release-signing.properties` and fill in your real values.
+# Keep the real file out of git. It is ignored by .gitignore.
+
+WEARPOD_RELEASE_STORE_FILE=/absolute/path/to/wearpod-release.jks
+WEARPOD_RELEASE_STORE_PASSWORD=replace-with-store-password
+WEARPOD_RELEASE_KEY_ALIAS=wearpod
+WEARPOD_RELEASE_KEY_PASSWORD=replace-with-key-password

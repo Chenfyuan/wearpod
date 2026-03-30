@@ -5,6 +5,17 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+import java.util.Properties
+
+fun firstNonBlank(vararg values: String?): String? = values.firstOrNull { !it.isNullOrBlank() }?.trim()
+
+val releaseSigningProperties = Properties().apply {
+    val localSigningFile = rootProject.file("release-signing.properties")
+    if (localSigningFile.exists()) {
+        localSigningFile.inputStream().use(::load)
+    }
+}
+
 val debugImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiBaseUrlDebug") as String?)
     ?: (project.findProperty("wearpodImportRelayApiBaseUrl") as String?)
     ?: "http://10.0.2.2:8787"
@@ -17,6 +28,32 @@ val releaseImportRelayApiBaseUrl = (project.findProperty("wearpodImportRelayApiB
 val releaseImportRelayFallbackApiBaseUrl = (project.findProperty("wearpodImportRelayFallbackApiBaseUrlRelease") as String?)
     ?: (project.findProperty("wearpodImportRelayFallbackApiBaseUrl") as String?)
     ?: ""
+val releaseStoreFilePath = firstNonBlank(
+    project.findProperty("WEARPOD_RELEASE_STORE_FILE") as String?,
+    releaseSigningProperties.getProperty("WEARPOD_RELEASE_STORE_FILE"),
+    System.getenv("WEARPOD_RELEASE_STORE_FILE"),
+)
+val releaseStorePassword = firstNonBlank(
+    project.findProperty("WEARPOD_RELEASE_STORE_PASSWORD") as String?,
+    releaseSigningProperties.getProperty("WEARPOD_RELEASE_STORE_PASSWORD"),
+    System.getenv("WEARPOD_RELEASE_STORE_PASSWORD"),
+)
+val releaseKeyAlias = firstNonBlank(
+    project.findProperty("WEARPOD_RELEASE_KEY_ALIAS") as String?,
+    releaseSigningProperties.getProperty("WEARPOD_RELEASE_KEY_ALIAS"),
+    System.getenv("WEARPOD_RELEASE_KEY_ALIAS"),
+)
+val releaseKeyPassword = firstNonBlank(
+    project.findProperty("WEARPOD_RELEASE_KEY_PASSWORD") as String?,
+    releaseSigningProperties.getProperty("WEARPOD_RELEASE_KEY_PASSWORD"),
+    System.getenv("WEARPOD_RELEASE_KEY_PASSWORD"),
+)
+val hasReleaseSigning = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.sjtech.wearpod"
@@ -35,6 +72,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(checkNotNull(releaseStoreFilePath))
+                storePassword = checkNotNull(releaseStorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField(
@@ -50,6 +98,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             buildConfigField(
                 "String",
                 "IMPORT_RELAY_API_BASE_URL",

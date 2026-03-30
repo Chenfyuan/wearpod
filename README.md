@@ -191,6 +191,31 @@ PORT=8787 \
 bash scripts/deploy-relay.sh main
 ```
 
+### 6. Prepare release signing
+
+The project supports local-only release signing without committing secrets to git.
+
+1. Copy the template:
+
+```bash
+cp release-signing.properties.example release-signing.properties
+```
+
+2. Fill in your real keystore path and passwords in `release-signing.properties`.
+
+3. Build a signed release when you are ready:
+
+```bash
+./gradlew assembleRelease
+```
+
+The real `release-signing.properties` file is ignored by git. You can also provide the same values through Gradle properties or environment variables:
+
+- `WEARPOD_RELEASE_STORE_FILE`
+- `WEARPOD_RELEASE_STORE_PASSWORD`
+- `WEARPOD_RELEASE_KEY_ALIAS`
+- `WEARPOD_RELEASE_KEY_PASSWORD`
+
 ## Development notes
 
 ### Debug sample feed

@@ -5,11 +5,17 @@ import com.sjtech.wearpod.data.model.PhoneExportSession
 import com.sjtech.wearpod.data.model.PhoneImportSessionSnapshot
 import com.sjtech.wearpod.data.model.PhoneImportSessionStatus
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URI
+import java.net.UnknownHostException
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -119,23 +125,47 @@ class ImportRelayClient(
     }
 
     private fun <T> requestWithFallback(block: (requestBaseUrl: String) -> T): T {
-        val candidates = buildList {
-            add(baseUrl.trim())
-            fallbackBaseUrl.trim()
-                .takeIf { it.isNotBlank() && it != baseUrl.trim() }
-                ?.let(::add)
-        }
-        var lastError: Throwable? = null
-        candidates.forEachIndexed { index, requestBaseUrl ->
+        val primaryBaseUrl = baseUrl.trim()
+        val secondaryBaseUrl = fallbackBaseUrl.trim()
+            .takeIf { it.isNotBlank() && it != primaryBaseUrl }
+
+        var primaryError: Throwable? = null
+        repeat(PRIMARY_RETRY_COUNT) { attempt ->
             try {
-                return block(requestBaseUrl)
+                return block(primaryBaseUrl)
             } catch (throwable: Throwable) {
-                lastError = throwable
-                if (index == candidates.lastIndex) throw throwable
+                primaryError = throwable
+                val hasNextPrimaryAttempt = attempt < PRIMARY_RETRY_COUNT - 1
+                if (!throwable.isRetryableNetworkFailure() || !hasNextPrimaryAttempt) return@repeat
+                Thread.sleep(PRIMARY_RETRY_DELAY_MILLIS)
             }
         }
-        throw checkNotNull(lastError)
+
+        val terminalPrimaryError = checkNotNull(primaryError)
+        if (!terminalPrimaryError.isRetryableNetworkFailure() || secondaryBaseUrl == null) {
+            throw terminalPrimaryError
+        }
+
+        try {
+            return block(secondaryBaseUrl)
+        } catch (fallbackError: Throwable) {
+            fallbackError.addSuppressed(terminalPrimaryError)
+            throw fallbackError
+        }
     }
+}
+
+private const val PRIMARY_RETRY_COUNT = 2
+private const val PRIMARY_RETRY_DELAY_MILLIS = 400L
+
+private fun Throwable.isRetryableNetworkFailure(): Boolean = when (this) {
+    is ConnectException,
+    is SocketException,
+    is SocketTimeoutException,
+    is UnknownHostException,
+    is SSLException,
+    is IOException -> true
+    else -> cause?.isRetryableNetworkFailure() == true
 }
 
 private fun HttpURLConnection.readJsonObject(): JSONObject {

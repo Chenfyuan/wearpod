@@ -192,6 +192,31 @@ PORT=8787 \
 bash scripts/deploy-relay.sh main
 ```
 
+### 6. 准备正式签名
+
+项目已经支持“本地配置正式签名，但密钥不进 git”的方式。
+
+1. 先复制模板：
+
+```bash
+cp release-signing.properties.example release-signing.properties
+```
+
+2. 在 `release-signing.properties` 里填入你真实的 keystore 路径和密码。
+
+3. 需要正式签名包时直接构建：
+
+```bash
+./gradlew assembleRelease
+```
+
+真实的 `release-signing.properties` 已经被 `.gitignore` 忽略。你也可以通过 Gradle 属性或环境变量传入同一组参数：
+
+- `WEARPOD_RELEASE_STORE_FILE`
+- `WEARPOD_RELEASE_STORE_PASSWORD`
+- `WEARPOD_RELEASE_KEY_ALIAS`
+- `WEARPOD_RELEASE_KEY_PASSWORD`
+
 ## 开发说明
 
 ### Debug 示例订阅源
