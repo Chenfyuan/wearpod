@@ -10,7 +10,7 @@ Usage:
 Environment variables:
   REPO_OWNER       GitHub owner. Default: Chenfyuan
   REPO_NAME        Repository name. Default: wearpod
-  REPO_REF         Git ref to deploy when no positional arg is provided. Default: main
+  REPO_REF         Git ref to deploy when no positional arg is provided. Default: latest
   APP_DIR          Remote relay working directory. Default: /opt/wearpod-relay/app
   ASSET_DIR        Remote docs assets directory. Default: /opt/wearpod-relay/docs/assets
   IMAGE_NAME       Docker image name. Default: wearpod-relay:latest
@@ -21,6 +21,7 @@ Environment variables:
 
 Examples:
   bash scripts/deploy-relay.sh
+  bash scripts/deploy-relay.sh latest
   bash scripts/deploy-relay.sh 327d431d9a1469c588dbefd8ebae058c70e9884e
   PUBLIC_BASE_URL=https://relay.example.com bash scripts/deploy-relay.sh main
 EOF
@@ -29,7 +30,7 @@ fi
 
 REPO_OWNER="${REPO_OWNER:-Chenfyuan}"
 REPO_NAME="${REPO_NAME:-wearpod}"
-REF="${1:-${REPO_REF:-main}}"
+REQUESTED_REF="${1:-${REPO_REF:-latest}}"
 APP_DIR="${APP_DIR:-/opt/wearpod-relay/app}"
 ASSET_DIR="${ASSET_DIR:-/opt/wearpod-relay/docs/assets}"
 IMAGE_NAME="${IMAGE_NAME:-wearpod-relay:latest}"
@@ -38,8 +39,36 @@ PORT="${PORT:-8787}"
 HOST_BIND="${HOST_BIND:-127.0.0.1}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://wearpod.linsblog.cn}"
 
-BASE_JSDELIVR="https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${REF}"
-BASE_RAW="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}"
+resolve_ref() {
+  local ref="$1"
+  local branch_ref="$ref"
+
+  if [[ "${ref}" == "latest" ]]; then
+    branch_ref="main"
+  fi
+
+  if [[ "${branch_ref}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    echo "${branch_ref}"
+    return
+  fi
+
+  local api_url="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${branch_ref}"
+  local resolved_sha
+  resolved_sha="$(
+    curl -fsSL "${api_url}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["sha"])'
+  )"
+
+  if [[ -z "${resolved_sha}" ]]; then
+    echo "Failed to resolve git ref: ${ref}" >&2
+    exit 1
+  fi
+
+  echo "${resolved_sha}"
+}
+
+RESOLVED_REF="$(resolve_ref "${REQUESTED_REF}")"
+BASE_JSDELIVR="https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${RESOLVED_REF}"
+BASE_RAW="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${RESOLVED_REF}"
 
 fetch_file() {
   local repo_path="$1"
@@ -103,6 +132,7 @@ curl -fsS "http://${HOST_BIND}:${PORT}/api/export-sessions" \
 echo
 
 echo "==> done"
-echo "deployed ref: ${REF}"
+echo "requested ref: ${REQUESTED_REF}"
+echo "resolved ref: ${RESOLVED_REF}"
 echo "public base: ${PUBLIC_BASE_URL}"
 echo "asset dir: ${ASSET_DIR}"
