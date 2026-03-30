@@ -18,15 +18,13 @@ It does not depend on a phone companion app. The current goal is simple: import 
 
 ## Preview
 
-![WearPod home screen](./docs/assets/wearpod-home.png)
-
-| Subscriptions | Import | Podcast detail |
+| Home | Subscriptions | Podcast detail |
 | --- | --- | --- |
-| ![WearPod subscriptions screen](./docs/assets/wearpod-subscriptions.png) | ![WearPod import screen](./docs/assets/wearpod-import.png) | ![WearPod podcast detail screen](./docs/assets/wearpod-detail.png) |
+| ![WearPod home screen](./docs/assets/wearpod-home.png) | ![WearPod subscriptions screen](./docs/assets/wearpod-subscriptions.png) | ![WearPod podcast detail screen](./docs/assets/wearpod-detail.png) |
 
-| Player | Downloads | Download & refresh settings |
+| Player | Queue | Downloads |
 | --- | --- | --- |
-| ![WearPod player screen](./docs/assets/wearpod-player.png) | ![WearPod downloads screen](./docs/assets/wearpod-downloads.png) | ![WearPod download settings screen](./docs/assets/wearpod-settings.png) |
+| ![WearPod player screen](./docs/assets/wearpod-player.png) | ![WearPod current queue screen](./docs/assets/wearpod-queue.png) | ![WearPod downloads screen](./docs/assets/wearpod-downloads.png) |
 
 ## What WearPod does today
 

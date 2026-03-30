@@ -31,6 +31,7 @@ sealed interface WearPodScreen {
     data object PhoneExport : WearPodScreen
     data object Downloads : WearPodScreen
     data object DownloadSettings : WearPodScreen
+    data object About : WearPodScreen
     data class PodcastDetail(val subscriptionId: String) : WearPodScreen
     data object Player : WearPodScreen
 }
@@ -145,6 +146,10 @@ class WearPodViewModel(
 
     fun openDownloadSettings() {
         push(WearPodScreen.DownloadSettings)
+    }
+
+    fun openAbout() {
+        push(WearPodScreen.About)
     }
 
     fun openImport() {

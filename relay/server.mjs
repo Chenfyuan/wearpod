@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import multer from "multer";
 import { XMLParser } from "fast-xml-parser";
@@ -6,6 +8,9 @@ import { XMLParser } from "fast-xml-parser";
 const app = express();
 const port = Number(process.env.PORT || 8787);
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || `http://localhost:${port}`).replace(/\/$/, "");
+const relayDir = path.dirname(fileURLToPath(import.meta.url));
+const docsAssetsDir = path.resolve(relayDir, "..", "docs", "assets");
+const docsAssetBaseUrl = process.env.DOCS_ASSET_BASE_URL || "/assets";
 const sessionTtlMs = 10 * 60 * 1000;
 const sessions = new Map();
 const shortCodeIndex = new Map();
@@ -22,9 +27,14 @@ const xmlParser = new XMLParser({
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/assets", express.static(docsAssetsDir, { maxAge: "1h" }));
 
 app.get("/", (_req, res) => {
   res.type("html").send(renderLandingPage());
+});
+
+app.get("/privacy", (_req, res) => {
+  res.type("html").send(renderPrivacyPage());
 });
 
 app.post("/enter-code", (req, res) => {
@@ -321,45 +331,301 @@ function renderLandingPage() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WearPod 手机导入</title>
+  <title>WearPod | 独立 Wear OS 播客播放器</title>
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <main class="shell">
-    <section class="card card-hero">
-      <div class="eyebrow">WearPod</div>
-      <h1>在手机上完成订阅导入</h1>
-      <p class="lede">手表负责播放和管理，手机只用来完成低频输入。</p>
-      <div class="hero-grid">
-        <div class="hero-step">
-          <div class="step-index">1</div>
-          <div>
-            <strong>扫描手表二维码</strong>
-            <p>进入本次导入会话</p>
+  <header class="site-nav">
+    <nav class="site-nav-inner">
+      <a class="brand-link" href="#home">WearPod</a>
+      <div class="nav-links">
+        <a href="#home">首页</a>
+        <a href="#import">导入</a>
+        <a href="#export">导出</a>
+        <a href="/privacy">隐私政策</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="shell shell-sections shell-wide">
+    <section class="hero-layout" id="home">
+      <div class="card card-hero hero-copy">
+        <div class="eyebrow">WearPod</div>
+        <h1>为圆形手表而生的独立播客播放器</h1>
+        <p class="lede">一款专为 Wear OS 打磨的独立播客应用。支持 RSS、手机扫码导入导出、离线下载与手表端直接播放，不需要 companion app，也不需要依赖手机做主控。</p>
+        <div class="hero-actions">
+          <a class="button-link" href="#import">开始导入</a>
+          <a class="button-link button-link-secondary" href="#preview">看看界面</a>
+        </div>
+        <div class="trust-row">
+          <div class="trust-pill">独立播放</div>
+          <div class="trust-pill">离线优先</div>
+          <div class="trust-pill">手机辅助导入</div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-device hero-device-primary">
+          <div class="watch-frame watch-frame-large">
+            <img src="${docsAssetBaseUrl}/wearpod-player.png" alt="WearPod 播放器预览" loading="lazy" />
           </div>
         </div>
-        <div class="hero-step">
-          <div class="step-index">2</div>
-          <div>
-            <strong>填写 RSS 或上传 OPML</strong>
-            <p>手机输入更轻松</p>
-          </div>
-        </div>
-        <div class="hero-step">
-          <div class="step-index">3</div>
-          <div>
-            <strong>回到手表确认导入</strong>
-            <p>真正导入仍由手表完成</p>
+        <div class="hero-device hero-device-secondary">
+          <div class="watch-frame watch-frame-medium">
+            <img src="${docsAssetBaseUrl}/wearpod-home.png" alt="WearPod 首页预览" loading="lazy" />
           </div>
         </div>
       </div>
-      <form method="post" action="/enter-code" class="stack compact-stack">
+    </section>
+
+    <section class="card section-card" id="preview">
+      <div class="section-title-block">
+        <div>
+          <div class="eyebrow">Preview</div>
+          <h2>把主流程压缩进手表安全区</h2>
+        </div>
+        <p class="section-copy">首页聚焦继续播放，播放器把主控制前置，导入则交给手机完成低频输入，整套体验都是围绕圆形屏幕重新组织的。</p>
+      </div>
+      <div class="preview-grid preview-grid-wide">
+        <figure class="preview-card">
+          <div class="watch-stage">
+            <div class="watch-frame watch-frame-card">
+              <img src="${docsAssetBaseUrl}/wearpod-home.png" alt="WearPod 首页预览" loading="lazy" />
+            </div>
+          </div>
+          <figcaption>
+            <strong>首页</strong>
+            <span>继续播放、收藏与主入口</span>
+          </figcaption>
+        </figure>
+        <figure class="preview-card">
+          <div class="watch-stage">
+            <div class="watch-frame watch-frame-card">
+              <img src="${docsAssetBaseUrl}/wearpod-player.png" alt="WearPod 播放器预览" loading="lazy" />
+            </div>
+          </div>
+          <figcaption>
+            <strong>播放器</strong>
+            <span>播放、切换、音量与输出都围绕核心控件组织</span>
+          </figcaption>
+        </figure>
+        <figure class="preview-card">
+          <div class="watch-stage">
+            <div class="watch-frame watch-frame-card">
+              <img src="${docsAssetBaseUrl}/wearpod-subscriptions.png" alt="WearPod 订阅预览" loading="lazy" />
+            </div>
+          </div>
+          <figcaption>
+            <strong>订阅与导出</strong>
+            <span>把导入、导出和订阅管理收进同一个手表入口</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="split-band" id="import">
+      <div class="card card-hero split-copy">
+        <div class="eyebrow">Import</div>
+        <h2>手机导入订阅，比在手表上打字更合理</h2>
+        <p class="lede">扫描手表上的导入二维码，或直接输入导入短码。你可以填一个 RSS，也可以上传一个 OPML 文件，导入结果会回到手表确认。</p>
+        <div class="hero-grid">
+          <div class="hero-step">
+            <div class="step-index">1</div>
+            <div>
+              <strong>进入导入会话</strong>
+              <p>扫描手表二维码或输入 6 位短码</p>
+            </div>
+          </div>
+          <div class="hero-step">
+            <div class="step-index">2</div>
+            <div>
+              <strong>填写 RSS 或上传 OPML</strong>
+              <p>把低频重输入放到手机上完成</p>
+            </div>
+          </div>
+          <div class="hero-step">
+            <div class="step-index">3</div>
+            <div>
+              <strong>回到手表确认导入</strong>
+              <p>保持 WearPod 的独立使用链路</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-form split-action">
+        <div class="section-head section-head-compact">
+          <div class="eyebrow">Short Code</div>
+          <h2>输入导入短码</h2>
+        </div>
+        <p class="section-copy">如果你已经在手表上生成了导入二维码，也可以直接在这里输入短码继续。</p>
+        ${renderShortCodeForm("输入导入短码", "继续到导入页")}
+      </div>
+    </section>
+
+    <section class="split-band" id="export">
+      <div class="card card-hero split-copy">
+        <div class="eyebrow">Export</div>
+        <h2>把手表里的订阅导出成 OPML 备份</h2>
+        <p class="lede">导出流程同样通过手机完成。扫描导出二维码或输入短码后，就能下载一份标准 OPML 文件，用于迁移、备份或转移到其他客户端。</p>
+        <div class="hero-grid">
+          <div class="hero-step">
+            <div class="step-index">1</div>
+            <div>
+              <strong>进入导出会话</strong>
+              <p>扫描手表导出二维码或输入短码</p>
+            </div>
+          </div>
+          <div class="hero-step">
+            <div class="step-index">2</div>
+            <div>
+              <strong>下载 OPML 文件</strong>
+              <p>保存到手机浏览器下载目录</p>
+            </div>
+          </div>
+          <div class="hero-step">
+            <div class="step-index">3</div>
+            <div>
+              <strong>用于迁移或备份</strong>
+              <p>支持迁移到其他播客客户端或设备</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-form split-action">
+        <div class="section-head section-head-compact">
+          <div class="eyebrow">Short Code</div>
+          <h2>输入导出短码</h2>
+        </div>
+        <p class="section-copy">手表上点“手机导出”后，会显示导出二维码和 6 位短码。你可以直接在这里继续下载备份。</p>
+        ${renderShortCodeForm("输入导出短码", "继续到导出页")}
+      </div>
+    </section>
+
+    <section class="card footer-card commerce-footer">
+      <div class="footer-grid footer-grid-wide">
+        <div>
+          <div class="eyebrow">WearPod</div>
+          <p class="footer-copy">WearPod 由广州舜健科技有限公司提供，为真正想在手表上独立听播客的人准备。若你需要使用帮助或售后支持，可以通过 chenfyuanl@gmail.com 联系我们。</p>
+        </div>
+        <div class="footer-actions">
+          <a class="button-link button-link-secondary" href="/privacy">查看隐私政策</a>
+          <a class="button-link" href="#import">开始使用</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function renderShortCodeForm(label, buttonText) {
+  return `
+      <form method="post" action="/enter-code" class="stack compact-stack short-code-form">
         <label>
-          短码进入
+          ${label}
           <input name="shortCode" maxlength="6" placeholder="输入 6 位短码" autocomplete="off" />
         </label>
-        <button type="submit">继续到导入页</button>
+        <button type="submit">${buttonText}</button>
       </form>
+  `;
+}
+
+function renderPrivacyPage() {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WearPod 隐私政策</title>
+  <style>${baseStyles()}</style>
+</head>
+<body>
+  <header class="site-nav">
+    <nav class="site-nav-inner">
+      <a class="brand-link" href="/">WearPod</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/#import">导入</a>
+        <a href="/#export">导出</a>
+        <a href="/privacy" aria-current="page">隐私政策</a>
+      </div>
+    </nav>
+  </header>
+  <main class="shell shell-sections">
+    <section class="card card-hero">
+      <div class="eyebrow">Privacy</div>
+      <h1>隐私政策</h1>
+      <p class="lede">本页面说明 WearPod 当前的导入导出中转服务如何处理数据。经营主体为广州舜健科技有限公司，联系邮箱与客服渠道均为 chenfyuanl@gmail.com，本政策自 2026-03-30 起生效。</p>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>主体与联系方式</h2>
+      </div>
+      <div class="policy-stack">
+        <div class="value-card">
+          <strong>经营主体</strong>
+          <p>广州舜健科技有限公司</p>
+        </div>
+        <div class="value-card">
+          <strong>联系邮箱</strong>
+          <p>chenfyuanl@gmail.com</p>
+        </div>
+        <div class="value-card">
+          <strong>客服渠道</strong>
+          <p>chenfyuanl@gmail.com</p>
+        </div>
+        <div class="value-card">
+          <strong>生效日期</strong>
+          <p>2026-03-30</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>我们处理哪些数据</h2>
+      </div>
+      <div class="policy-stack">
+        <div class="value-card">
+          <strong>导入数据</strong>
+          <p>当你使用手机导入时，服务会接收你提交的 RSS 地址或 OPML 文件内容，用于生成手表可读取的本次导入结果。</p>
+        </div>
+        <div class="value-card">
+          <strong>导出数据</strong>
+          <p>当你使用手机导出时，服务会暂存手表生成的 OPML 内容，并提供一次性下载链接。</p>
+        </div>
+        <div class="value-card">
+          <strong>会话信息</strong>
+          <p>系统会生成短码、会话编号和过期时间，用于让手机和手表在短时间内完成同一次操作。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>我们如何保留这些数据</h2>
+      </div>
+      <div class="policy-stack">
+        <div class="value-card">
+          <strong>短时有效</strong>
+          <p>导入和导出会话默认只保留约 10 分钟，过期后会失效，避免长期保留临时数据。</p>
+        </div>
+        <div class="value-card">
+          <strong>仅用于本次操作</strong>
+          <p>这些数据用于完成当前二维码对应的导入或导出，不会被用作账号画像、推荐或广告用途。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card footer-card">
+      <div class="footer-grid">
+        <div>
+          <div class="eyebrow">Notice</div>
+          <p class="footer-copy">如果你对 WearPod 的数据处理、订阅导入导出或售后支持有任何疑问，请发送邮件至 chenfyuanl@gmail.com。</p>
+        </div>
+        <a class="button-link" href="/">返回首页</a>
+      </div>
     </section>
   </main>
 </body>
@@ -579,6 +845,56 @@ function baseStyles() {
         var(--bg);
       color: var(--text);
     }
+    html {
+      scroll-behavior: smooth;
+    }
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 14px 16px 0;
+      background: linear-gradient(180deg, rgba(9, 8, 13, 0.92), rgba(9, 8, 13, 0.38), transparent);
+      backdrop-filter: blur(18px);
+    }
+    .site-nav-inner {
+      width: min(100%, 940px);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(20, 16, 24, 0.72);
+      box-shadow: 0 16px 32px rgba(0,0,0,0.24);
+    }
+    .brand-link {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .nav-links a:hover,
+    .nav-links a[aria-current="page"] {
+      color: var(--text);
+      background: rgba(255,255,255,0.06);
+    }
     .shell {
       min-height: 100vh;
       display: grid;
@@ -586,8 +902,16 @@ function baseStyles() {
       padding: 24px;
       gap: 16px;
     }
+    .shell-sections {
+      place-items: start center;
+      padding-top: 18px;
+      padding-bottom: 40px;
+    }
+    .shell-wide {
+      gap: 22px;
+    }
     .card {
-      width: min(100%, 420px);
+      width: min(100%, 1040px);
       background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
       border: 1px solid var(--border);
       border-radius: 28px;
@@ -595,9 +919,110 @@ function baseStyles() {
       box-shadow: 0 24px 60px rgba(0,0,0,0.35);
       backdrop-filter: blur(20px);
     }
+    .hero-layout,
+    .split-band {
+      width: min(100%, 1040px);
+      display: grid;
+      gap: 18px;
+    }
+    .hero-layout {
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      align-items: stretch;
+    }
+    .hero-copy,
+    .split-copy {
+      min-height: 100%;
+    }
+    .hero-visual {
+      position: relative;
+      min-height: 520px;
+      display: grid;
+      align-items: center;
+      justify-items: center;
+    }
+    .hero-device {
+      display: grid;
+      place-items: center;
+    }
+    .hero-device-primary {
+      width: min(100%, 420px);
+      aspect-ratio: 1;
+    }
+    .hero-device-secondary {
+      position: absolute;
+      left: 0;
+      bottom: 12px;
+      width: 180px;
+      aspect-ratio: 1;
+      transform: rotate(-10deg);
+      opacity: 0.92;
+    }
+    .watch-stage {
+      display: grid;
+      place-items: center;
+      padding: 10px 8px 4px;
+      min-height: 248px;
+      background:
+        radial-gradient(circle at 50% 30%, rgba(255,123,91,0.08), transparent 50%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+    }
+    .watch-frame {
+      position: relative;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #19161f;
+      box-shadow:
+        0 26px 60px rgba(0,0,0,0.42),
+        inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    .watch-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,255,255,0.14), transparent 30%),
+        radial-gradient(circle at 50% 50%, rgba(0,0,0,0), rgba(0,0,0,0.18) 74%, rgba(0,0,0,0.38) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .watch-frame::after {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border-radius: 50%;
+      box-shadow:
+        inset 0 0 0 10px #454545,
+        inset 0 0 0 15px #2a2a2f,
+        inset 0 0 0 18px rgba(255,255,255,0.05);
+      pointer-events: none;
+      z-index: 3;
+    }
+    .watch-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .watch-frame-large {
+      width: min(100%, 420px);
+      aspect-ratio: 1;
+    }
+    .watch-frame-medium {
+      width: 180px;
+      aspect-ratio: 1;
+    }
+    .watch-frame-card {
+      width: min(100%, 230px);
+      aspect-ratio: 1;
+    }
     .card-hero {
       position: relative;
       overflow: hidden;
+    }
+    .footer-card {
+      padding-top: 18px;
+      padding-bottom: 18px;
     }
     .card-hero::after {
       content: "";
@@ -620,14 +1045,58 @@ function baseStyles() {
       font-size: 30px;
       line-height: 1.1;
     }
+    h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+    }
     p {
       margin: 0 0 18px;
       line-height: 1.5;
       color: var(--muted);
     }
+    .section-head {
+      margin-bottom: 16px;
+    }
+    .section-head-compact {
+      margin-bottom: 12px;
+    }
+    .section-title-block {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(260px, 0.7fr);
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+    .section-copy {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.65;
+    }
     .lede {
       font-size: 15px;
       margin-bottom: 20px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .trust-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .trust-pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 13px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .stack {
       display: grid;
@@ -673,6 +1142,11 @@ function baseStyles() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+    }
+    .button-link-secondary {
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      box-shadow: none;
     }
     button:hover,
     .button-link:hover {
@@ -726,6 +1200,22 @@ function baseStyles() {
       gap: 10px;
       margin-bottom: 22px;
     }
+    .value-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .value-card {
+      padding: 14px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid var(--border);
+    }
+    .value-card strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
     .hero-step {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -760,6 +1250,33 @@ function baseStyles() {
       font-weight: 700;
       border: 1px solid rgba(255,123,91,0.18);
       flex-shrink: 0;
+    }
+    .preview-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .preview-grid-wide {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .preview-card {
+      margin: 0;
+      border-radius: 22px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .preview-card figcaption {
+      display: grid;
+      gap: 4px;
+      padding: 14px 16px 16px;
+    }
+    .preview-card figcaption strong {
+      font-size: 15px;
+    }
+    .preview-card figcaption span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
     }
     .hero-topline {
       display: flex;
@@ -797,6 +1314,11 @@ function baseStyles() {
     }
     .card-form {
       background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018));
+    }
+    .split-action {
+      align-self: stretch;
+      display: grid;
+      align-content: start;
     }
     .input-card {
       padding: 18px;
@@ -862,9 +1384,73 @@ function baseStyles() {
       font-size: 13px;
       text-align: center;
     }
+    .footer-grid {
+      display: grid;
+      gap: 14px;
+    }
+    .footer-grid-wide {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .commerce-footer {
+      overflow: hidden;
+    }
+    .footer-copy {
+      max-width: 46ch;
+    }
+    .policy-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+    }
     @media (max-width: 480px) {
+      .site-nav {
+        padding: 10px 10px 0;
+      }
+      .site-nav-inner {
+        align-items: start;
+        flex-direction: column;
+        border-radius: 24px;
+      }
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
       .shell {
         padding: 16px;
+      }
+      .hero-layout,
+      .split-band,
+      .section-title-block,
+      .preview-grid-wide,
+      .footer-grid-wide {
+        grid-template-columns: 1fr;
+      }
+      .hero-visual {
+        min-height: auto;
+      }
+      .hero-device-primary {
+        width: 100%;
+        max-width: 360px;
+      }
+      .hero-device-secondary {
+        position: relative;
+        left: auto;
+        bottom: auto;
+        width: 52%;
+        justify-self: start;
+        margin-top: -42px;
+        transform: rotate(-8deg);
       }
       .card {
         padding: 20px;
@@ -872,11 +1458,20 @@ function baseStyles() {
       h1 {
         font-size: 26px;
       }
+      h2 {
+        font-size: 22px;
+      }
+      .hero-actions {
+        display: grid;
+      }
       .hero-topline {
         flex-direction: column;
       }
       .hero-topline h1 {
         max-width: none;
+      }
+      .footer-actions {
+        justify-content: flex-start;
       }
       .session-strip {
         grid-template-columns: 1fr;

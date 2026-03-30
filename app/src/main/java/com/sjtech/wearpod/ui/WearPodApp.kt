@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headset
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -85,6 +86,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.foundation.BasicSwipeToDismissBox
 import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
 import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
+import com.sjtech.wearpod.BuildConfig
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.Subscription
@@ -312,7 +314,10 @@ private fun ScreenContent(
             onSetBackgroundRefreshEnabled = viewModel::setBackgroundRefreshEnabled,
             onSetBackgroundRefreshInterval = viewModel::setBackgroundRefreshInterval,
             onSetAutoDeletePlayedDownloads = viewModel::setAutoDeletePlayedDownloads,
+            onOpenAbout = viewModel::openAbout,
         )
+
+        WearPodScreen.About -> AboutScreen()
 
         is WearPodScreen.PodcastDetail -> {
             val subscription = snapshot.subscriptions.firstOrNull { it.id == screen.subscriptionId }
@@ -393,6 +398,7 @@ private fun screenKey(screen: WearPodScreen): String = when (screen) {
     WearPodScreen.PhoneExport -> "phone-export"
     WearPodScreen.Downloads -> "downloads"
     WearPodScreen.DownloadSettings -> "download-settings"
+    WearPodScreen.About -> "about"
     is WearPodScreen.PodcastDetail -> "podcast-${screen.subscriptionId}"
     WearPodScreen.Player -> "player"
 }
@@ -2737,6 +2743,7 @@ private fun DownloadSettingsScreen(
     onSetBackgroundRefreshEnabled: (Boolean) -> Unit,
     onSetBackgroundRefreshInterval: (Int) -> Unit,
     onSetAutoDeletePlayedDownloads: (Boolean) -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     val settings = snapshot.downloadSettings
     LazyColumn(
@@ -2909,6 +2916,116 @@ private fun DownloadSettingsScreen(
                 }
             }
         }
+        item {
+            WatchChip(
+                title = "关于",
+                subtitle = "版本与支持",
+                leading = {
+                    Icon(
+                        Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = WearPodPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                trailing = {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = WearPodTextMuted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                onClick = onOpenAbout,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutScreen() {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                WatchTimeHeader(color = WearPodTextMuted)
+            }
+        }
+        item {
+            SectionTitle(title = "关于 WearPod", subtitle = "版本与支持信息")
+        }
+        item {
+            DarkCard {
+                AboutInfoRow(label = "应用", value = "WearPod")
+                AboutInfoRow(label = "版本", value = BuildConfig.VERSION_NAME)
+                AboutInfoRow(label = "经营主体", value = "广州舜健科技有限公司")
+                AboutInfoRow(label = "包名", value = BuildConfig.APPLICATION_ID, marquee = true)
+            }
+        }
+        item {
+            DarkCard {
+                Text(
+                    text = "独立运行的 Wear OS 播客播放器，支持 RSS 导入、二维码手机导入导出、离线下载与手表端独立收听。",
+                    color = WearPodTextPrimary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                )
+            }
+        }
+        item {
+            DarkCard {
+                AboutInfoRow(label = "官网", value = "wearpod.linsblog.cn", marquee = true)
+                AboutInfoRow(label = "联系邮箱", value = "chenfyuanl@gmail.com", marquee = true)
+                AboutInfoRow(label = "客服渠道", value = "chenfyuanl@gmail.com", marquee = true)
+                AboutInfoRow(label = "隐私生效", value = "2026-03-30")
+            }
+        }
+        item {
+            DarkCard {
+                Text(
+                    text = "WearPod 支持扫码导入、二维码导出、离线收听与手表端独立播放。隐私政策与联系信息已同步到官网页面。",
+                    color = WearPodTextMuted,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutInfoRow(
+    label: String,
+    value: String,
+    marquee: Boolean = false,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            color = WearPodTextMuted,
+            fontSize = 10.sp,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            color = WearPodTextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+            modifier = if (marquee) {
+                Modifier
+                    .fillMaxWidth()
+                    .basicMarquee(iterations = Int.MAX_VALUE)
+            } else {
+                Modifier.fillMaxWidth()
+            },
+        )
     }
 }
 
