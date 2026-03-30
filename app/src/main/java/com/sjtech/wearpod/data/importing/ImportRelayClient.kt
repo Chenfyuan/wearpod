@@ -1,5 +1,7 @@
 package com.sjtech.wearpod.data.importing
 
+import android.content.Context
+import com.sjtech.wearpod.R
 import com.sjtech.wearpod.data.model.PhoneImportSession
 import com.sjtech.wearpod.data.model.PhoneExportSession
 import com.sjtech.wearpod.data.model.PhoneImportSessionSnapshot
@@ -22,6 +24,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ImportRelayClient(
+    private val appContext: Context,
     private val baseUrl: String,
     private val fallbackBaseUrl: String = "",
 ) {
@@ -34,7 +37,7 @@ class ImportRelayClient(
                 doOutput = true
                 setRequestProperty("Content-Length", "0")
             }
-            val payload = connection.readJsonObject()
+            val payload = readJsonObject(connection)
             PhoneImportSession(
                 sessionId = payload.getString("sessionId"),
                 shortCode = payload.getString("shortCode"),
@@ -60,7 +63,7 @@ class ImportRelayClient(
             connection.outputStream.use { stream ->
                 stream.write(payload.toString().toByteArray(StandardCharsets.UTF_8))
             }
-            val response = connection.readJsonObject()
+            val response = readJsonObject(connection)
             PhoneExportSession(
                 sessionId = response.getString("sessionId"),
                 shortCode = response.getString("shortCode"),
@@ -74,7 +77,8 @@ class ImportRelayClient(
     suspend fun fetchSession(sessionId: String): PhoneImportSessionSnapshot = withContext(Dispatchers.IO) {
         ensureConfigured()
         requestWithFallback { requestBaseUrl ->
-            val payload = openConnection(requestBaseUrl, "/api/sessions/$sessionId").readJsonObject()
+            val connection = openConnection(requestBaseUrl, "/api/sessions/$sessionId")
+            val payload = readJsonObject(connection)
             PhoneImportSessionSnapshot(
                 sessionId = payload.getString("sessionId"),
                 shortCode = payload.getString("shortCode"),
@@ -90,9 +94,15 @@ class ImportRelayClient(
 
     private fun ensureConfigured() {
         check(isConfigured()) {
-            "手机导入服务未配置"
+            appContext.getString(R.string.banner_phone_import_service_unavailable)
         }
     }
+
+    private fun requestFailedMessage(code: Int): String =
+        appContext.getString(R.string.request_failed_http, code)
+
+    private fun readJsonObject(connection: HttpURLConnection): JSONObject =
+        connection.readJsonObject(requestFailedMessage = ::requestFailedMessage)
 
     private fun openConnection(requestBaseUrl: String, path: String, method: String = "GET"): HttpURLConnection {
         val separator = if (path.startsWith("/")) "" else "/"
@@ -168,13 +178,13 @@ private fun Throwable.isRetryableNetworkFailure(): Boolean = when (this) {
     else -> cause?.isRetryableNetworkFailure() == true
 }
 
-private fun HttpURLConnection.readJsonObject(): JSONObject {
+private fun HttpURLConnection.readJsonObject(requestFailedMessage: (Int) -> String): JSONObject {
     val responseStream = try {
         val code = responseCode
         if (code !in 200..299) {
             val errorBody = errorStream?.bufferedReader()?.use(BufferedReader::readText)
             disconnect()
-            error(errorBody?.takeIf(String::isNotBlank) ?: "请求失败，HTTP $code")
+            error(errorBody?.takeIf(String::isNotBlank) ?: requestFailedMessage(code))
         }
         inputStream
     } catch (throwable: Throwable) {

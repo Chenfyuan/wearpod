@@ -10,6 +10,7 @@ import android.media.MediaRouter2
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import com.sjtech.wearpod.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,7 @@ enum class AudioOutputKind {
 }
 
 data class AudioOutputSnapshot(
-    val label: String = "手表扬声器",
+    val label: String = "",
     val kind: AudioOutputKind = AudioOutputKind.SPEAKER,
 ) {
     val isExternal: Boolean
@@ -109,7 +110,7 @@ class AudioOutputController(
             .sortedByDescending(::devicePriority)
             .firstOrNull()
             ?.toSnapshot()
-            ?: AudioOutputSnapshot()
+            ?: AudioOutputSnapshot(label = appContext.getString(R.string.audio_output_watch_speaker))
     }
 
     private fun MediaRoute2Info.toSnapshot(): AudioOutputSnapshot {
@@ -119,7 +120,7 @@ class AudioOutputController(
             MediaRoute2Info.TYPE_BLE_HEADSET,
             MediaRoute2Info.TYPE_HEARING_AID,
             -> AudioOutputSnapshot(
-                label = routeName.ifBlank { "蓝牙耳机" },
+                label = routeName.ifBlank { appContext.getString(R.string.audio_output_bluetooth_headphones) },
                 kind = AudioOutputKind.BLUETOOTH,
             )
 
@@ -129,7 +130,7 @@ class AudioOutputController(
             MediaRoute2Info.TYPE_USB_ACCESSORY,
             MediaRoute2Info.TYPE_USB_DEVICE,
             -> AudioOutputSnapshot(
-                label = routeName.ifBlank { "有线耳机" },
+                label = routeName.ifBlank { appContext.getString(R.string.audio_output_wired_headphones) },
                 kind = AudioOutputKind.WIRED,
             )
 
@@ -146,17 +147,17 @@ class AudioOutputController(
             MediaRoute2Info.TYPE_GROUP,
             MediaRoute2Info.TYPE_MULTICHANNEL_SPEAKER_GROUP,
             -> AudioOutputSnapshot(
-                label = routeName.ifBlank { "远程播放" },
+                label = routeName.ifBlank { appContext.getString(R.string.audio_output_remote_playback) },
                 kind = AudioOutputKind.REMOTE,
             )
 
             MediaRoute2Info.TYPE_BUILTIN_SPEAKER -> AudioOutputSnapshot(
-                label = "手表扬声器",
+                label = appContext.getString(R.string.audio_output_watch_speaker),
                 kind = AudioOutputKind.SPEAKER,
             )
 
             else -> AudioOutputSnapshot(
-                label = routeName.ifBlank { "当前输出" },
+                label = routeName.ifBlank { appContext.getString(R.string.audio_output_current) },
                 kind = AudioOutputKind.OTHER,
             )
         }
@@ -170,7 +171,7 @@ class AudioOutputController(
             AudioDeviceInfo.TYPE_BLE_SPEAKER,
             AudioDeviceInfo.TYPE_BLE_BROADCAST,
             -> AudioOutputSnapshot(
-                label = deviceName.ifBlank { "蓝牙耳机" },
+                label = deviceName.ifBlank { appContext.getString(R.string.audio_output_bluetooth_headphones) },
                 kind = AudioOutputKind.BLUETOOTH,
             )
 
@@ -180,12 +181,12 @@ class AudioOutputController(
             AudioDeviceInfo.TYPE_USB_ACCESSORY,
             AudioDeviceInfo.TYPE_USB_DEVICE,
             -> AudioOutputSnapshot(
-                label = deviceName.ifBlank { "有线耳机" },
+                label = deviceName.ifBlank { appContext.getString(R.string.audio_output_wired_headphones) },
                 kind = AudioOutputKind.WIRED,
             )
 
             AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> AudioOutputSnapshot(
-                label = "手表扬声器",
+                label = appContext.getString(R.string.audio_output_watch_speaker),
                 kind = AudioOutputKind.SPEAKER,
             )
 
@@ -196,12 +197,12 @@ class AudioOutputController(
             AudioDeviceInfo.TYPE_LINE_ANALOG,
             AudioDeviceInfo.TYPE_LINE_DIGITAL,
             -> AudioOutputSnapshot(
-                label = deviceName.ifBlank { "外部设备" },
+                label = deviceName.ifBlank { appContext.getString(R.string.audio_output_external_device) },
                 kind = AudioOutputKind.REMOTE,
             )
 
             else -> AudioOutputSnapshot(
-                label = deviceName.ifBlank { "当前输出" },
+                label = deviceName.ifBlank { appContext.getString(R.string.audio_output_current) },
                 kind = AudioOutputKind.OTHER,
             )
         }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.first
 
 data class WearPodPreferencesSnapshot(
     val playbackMemory: PlaybackMemory,
+    val hasCompletedAudioOutputSetup: Boolean,
     val downloadSettings: DownloadSettings,
     val sleepTimer: SleepTimer,
 )
@@ -38,13 +39,14 @@ class WearPodPreferencesStore(context: Context) {
 
         return WearPodPreferencesSnapshot(
             playbackMemory = PlaybackMemory(
-                currentEpisodeId = preferences[CURRENT_EPISODE_ID]?.takeUnless { value -> value.isBlank() },
-                lastEpisodeId = preferences[LAST_EPISODE_ID]?.takeUnless { value -> value.isBlank() },
+                currentEpisodeId = preferences[CURRENT_EPISODE_ID]?.takeUnless { it.isBlank() },
+                lastEpisodeId = preferences[LAST_EPISODE_ID]?.takeUnless { it.isBlank() },
                 positionMs = preferences[PLAYBACK_POSITION_MS] ?: 0L,
                 durationMs = preferences[PLAYBACK_DURATION_MS] ?: 0L,
                 speed = preferences[PLAYBACK_SPEED] ?: 1.0f,
                 updatedAtEpochMillis = preferences[PLAYBACK_UPDATED_AT] ?: 0L,
             ),
+            hasCompletedAudioOutputSetup = preferences[HAS_COMPLETED_AUDIO_OUTPUT_SETUP] ?: false,
             downloadSettings = DownloadSettings(
                 wifiOnly = preferences[WIFI_ONLY] ?: true,
                 autoDownloadLatestCount = (preferences[AUTO_DOWNLOAD_LATEST_COUNT] ?: 0).coerceIn(0, 3),
@@ -73,6 +75,7 @@ class WearPodPreferencesStore(context: Context) {
             preferences[PLAYBACK_DURATION_MS] = snapshot.playbackMemory.durationMs
             preferences[PLAYBACK_SPEED] = snapshot.playbackMemory.speed
             preferences[PLAYBACK_UPDATED_AT] = snapshot.playbackMemory.updatedAtEpochMillis
+            preferences[HAS_COMPLETED_AUDIO_OUTPUT_SETUP] = snapshot.hasCompletedAudioOutputSetup
             preferences[WIFI_ONLY] = snapshot.downloadSettings.wifiOnly
             preferences[AUTO_DOWNLOAD_LATEST_COUNT] = snapshot.downloadSettings.autoDownloadLatestCount
             preferences[BACKGROUND_AUTO_DOWNLOAD_ENABLED] = snapshot.downloadSettings.backgroundAutoDownloadEnabled
@@ -108,6 +111,7 @@ private val PLAYBACK_POSITION_MS = longPreferencesKey("playback_position_ms")
 private val PLAYBACK_DURATION_MS = longPreferencesKey("playback_duration_ms")
 private val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
 private val PLAYBACK_UPDATED_AT = longPreferencesKey("playback_updated_at")
+private val HAS_COMPLETED_AUDIO_OUTPUT_SETUP = booleanPreferencesKey("has_completed_audio_output_setup")
 private val WIFI_ONLY = booleanPreferencesKey("wifi_only")
 private val AUTO_DOWNLOAD_LATEST_COUNT = intPreferencesKey("auto_download_latest_count")
 private val BACKGROUND_AUTO_DOWNLOAD_ENABLED = booleanPreferencesKey("background_auto_download_enabled")

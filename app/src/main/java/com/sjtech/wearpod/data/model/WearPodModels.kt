@@ -67,6 +67,7 @@ data class AppSnapshot(
     val episodes: List<Episode>,
     val favoriteSubscriptionIds: Set<String>,
     val playbackMemory: PlaybackMemory,
+    val hasCompletedAudioOutputSetup: Boolean = false,
     val downloadSettings: DownloadSettings = DownloadSettings(),
     val sleepTimer: SleepTimer = SleepTimer(),
 ) {
@@ -76,6 +77,7 @@ data class AppSnapshot(
             episodes = emptyList(),
             favoriteSubscriptionIds = emptySet(),
             playbackMemory = PlaybackMemory(),
+            hasCompletedAudioOutputSetup = false,
             downloadSettings = DownloadSettings(),
             sleepTimer = SleepTimer(),
         )

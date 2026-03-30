@@ -26,6 +26,7 @@ class AppContainer(application: Application) {
     private val parser = PodcastFeedParser()
     private val networkClient = FeedNetworkClient()
     private val importRelayClient = ImportRelayClient(
+        appContext = application,
         baseUrl = BuildConfig.IMPORT_RELAY_API_BASE_URL,
         fallbackBaseUrl = BuildConfig.IMPORT_RELAY_FALLBACK_API_BASE_URL,
     )

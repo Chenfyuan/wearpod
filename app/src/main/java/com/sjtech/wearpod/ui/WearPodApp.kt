@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,6 +88,7 @@ import androidx.wear.compose.foundation.BasicSwipeToDismissBox
 import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
 import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
 import com.sjtech.wearpod.BuildConfig
+import com.sjtech.wearpod.R
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.Subscription
@@ -304,12 +306,14 @@ private fun ScreenContent(
 
         WearPodScreen.DownloadSettings -> DownloadSettingsScreen(
             snapshot = snapshot,
+            languagePreference = viewModel.languagePreference,
             onSetWifiOnly = viewModel::setWifiOnlyDownloads,
             onSetAutoDownloadCount = viewModel::setAutoDownloadLatestCount,
             onSetBackgroundAutoDownload = viewModel::setBackgroundAutoDownload,
             onSetBackgroundRefreshEnabled = viewModel::setBackgroundRefreshEnabled,
             onSetBackgroundRefreshInterval = viewModel::setBackgroundRefreshInterval,
             onSetAutoDeletePlayedDownloads = viewModel::setAutoDeletePlayedDownloads,
+            onSetLanguage = viewModel::setLanguage,
             onOpenAbout = viewModel::openAbout,
         )
 
@@ -460,6 +464,7 @@ private fun HomeScreen(
     onOpenImport: () -> Unit,
     onOpenSubscription: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val favoriteSubscriptions = snapshot.subscriptions
         .filter { subscription -> snapshot.favoriteSubscriptionIds.contains(subscription.id) }
         .sortedByDescending { subscription ->
@@ -479,7 +484,7 @@ private fun HomeScreen(
         player.hasMedia && player.title.isNotBlank() -> player.title
         activeEpisode != null -> activeEpisode.title
         continueEpisode != null -> continueEpisode.title
-        else -> "用手机导入开始收听"
+        else -> stringResource(R.string.home_start_listening)
     }
     val cardArtworkUrl = when {
         player.hasMedia && !player.artworkUrl.isNullOrBlank() -> player.artworkUrl
@@ -493,9 +498,9 @@ private fun HomeScreen(
         }
         player.hasMedia && player.subtitle.isNotBlank() -> player.subtitle
         continueEpisode != null -> {
-            "${formatDurationShort(continueEpisode.durationSeconds)} • ${formatRelativeTime(continueEpisode.lastPlayedAtEpochMillis ?: continueEpisode.publishedAtEpochMillis)}"
+            "${formatDurationShort(continueEpisode.durationSeconds)} • ${formatRelativeTime(context, continueEpisode.lastPlayedAtEpochMillis ?: continueEpisode.publishedAtEpochMillis)}"
         }
-        else -> "扫码导入，手表独立收听"
+        else -> stringResource(R.string.home_scan_import_subtitle)
     }
 
     LazyColumn(
@@ -506,7 +511,7 @@ private fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         item {
-            RootScreenHeader(title = "首页")
+            RootScreenHeader(title = stringResource(R.string.home_title))
         }
 
         item {
@@ -540,7 +545,7 @@ private fun HomeScreen(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 WatchCompactChip(
-                    text = "收藏(${favoriteSubscriptions.size})",
+                    text = stringResource(R.string.home_favorites_count, favoriteSubscriptions.size),
                     highlighted = favoriteSubscriptions.isNotEmpty(),
                 )
             }
@@ -553,7 +558,7 @@ private fun HomeScreen(
                     .maxByOrNull { it.publishedAtEpochMillis ?: 0L }
                 WatchChip(
                     title = subscription.title,
-                    subtitle = latestEpisode?.title ?: "暂无节目",
+                    subtitle = latestEpisode?.title ?: stringResource(R.string.home_no_episode),
                     titleMarquee = true,
                     subtitleMarquee = true,
                     leading = {
@@ -743,6 +748,7 @@ private fun SubscriptionsScreen(
     onConfirmUnsubscribe: (String) -> Unit,
 ) {
     val failedSubscriptions = snapshot.subscriptions.filter { !it.lastRefreshError.isNullOrBlank() }
+    val subscriptionsTitle = stringResource(R.string.subscriptions_title)
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -768,7 +774,7 @@ private fun SubscriptionsScreen(
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "订阅",
+                        text = subscriptionsTitle,
                         color = WearPodPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -783,14 +789,14 @@ private fun SubscriptionsScreen(
                     )
                 }
             } else {
-                RootScreenHeader(title = "订阅")
+                RootScreenHeader(title = subscriptionsTitle)
             }
         }
 
         item {
             WatchChip(
-                title = "手机导入",
-                subtitle = "扫码导入订阅",
+                title = stringResource(R.string.phone_import_title),
+                subtitle = stringResource(R.string.phone_import_card_subtitle),
                 prominent = true,
                 leading = {
                     Icon(
@@ -814,8 +820,8 @@ private fun SubscriptionsScreen(
 
         item {
             WatchChip(
-                title = "手机导出",
-                subtitle = "扫码下载 OPML",
+                title = stringResource(R.string.phone_export_title),
+                subtitle = stringResource(R.string.phone_export_card_subtitle),
                 leading = {
                     Icon(
                         Icons.Rounded.CloudDownload,
@@ -842,12 +848,12 @@ private fun SubscriptionsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 WatchCompactChip(
-                    text = "${snapshot.subscriptions.size} 个订阅",
+                    text = stringResource(R.string.subscriptions_count, snapshot.subscriptions.size),
                     highlighted = snapshot.subscriptions.isNotEmpty(),
                     modifier = Modifier.weight(1f),
                 )
                 WatchCompactChip(
-                    text = "刷新",
+                    text = stringResource(R.string.refresh),
                     modifier = Modifier.weight(1f),
                     leading = {
                         Icon(
@@ -869,7 +875,7 @@ private fun SubscriptionsScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     WatchCompactChip(
-                        text = "刷新失败(${failedSubscriptions.size})",
+                        text = stringResource(R.string.refresh_failed_count, failedSubscriptions.size),
                         highlighted = true,
                     )
                 }
@@ -879,9 +885,9 @@ private fun SubscriptionsScreen(
                 WatchChip(
                     title = subscription.title,
                     subtitle = if (retryingSubscriptionId == subscription.id) {
-                        "重试中..."
+                        stringResource(R.string.refresh_retrying)
                     } else {
-                        subscription.lastRefreshError ?: "刷新失败"
+                        subscription.lastRefreshError ?: stringResource(R.string.refresh_failed)
                     },
                     prominent = true,
                     titleMarquee = true,
@@ -923,7 +929,7 @@ private fun SubscriptionsScreen(
                         .padding(top = 32.dp, bottom = 24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("还没有订阅\n先用手机导入订阅", color = WearPodTextMuted, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.subscriptions_empty), color = WearPodTextMuted, textAlign = TextAlign.Center)
                 }
             }
         } else {
@@ -935,7 +941,7 @@ private fun SubscriptionsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     WatchChip(
                         title = subscription.title,
-                        subtitle = if (isPendingUnsubscribe) "点按确认取消订阅" else latestEpisode?.title ?: "暂无新节目",
+                        subtitle = if (isPendingUnsubscribe) stringResource(R.string.confirm_unsubscribe_hint) else latestEpisode?.title ?: stringResource(R.string.no_new_episode),
                         prominent = isPendingUnsubscribe,
                         titleMarquee = true,
                         subtitleMarquee = !isPendingUnsubscribe,
@@ -971,12 +977,12 @@ private fun SubscriptionsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             WatchCompactChip(
-                                text = "取消",
+                                text = stringResource(R.string.cancel),
                                 modifier = Modifier.weight(1f),
                                 onClick = onDismissUnsubscribeRequest,
                             )
                             WatchCompactChip(
-                                text = "确认取消",
+                                text = stringResource(R.string.confirm_unsubscribe),
                                 modifier = Modifier.weight(1f),
                                 highlighted = true,
                                 onClick = { onConfirmUnsubscribe(subscription.id) },
@@ -1027,16 +1033,16 @@ private fun PhoneImportScreen(
 
         item {
             SectionTitle(
-                title = "手机导入",
+                title = stringResource(R.string.phone_import_title),
                 subtitle = when (state.stage) {
-                    PhoneImportStage.CREATING -> "正在生成二维码"
-                    PhoneImportStage.WAITING -> "用手机扫码继续"
-                    PhoneImportStage.REVIEW -> "手机已提交，确认后导入"
-                    PhoneImportStage.IMPORTING -> "正在导入订阅"
-                    PhoneImportStage.SUCCESS -> "手机导入完成"
-                    PhoneImportStage.EXPIRED -> "二维码已过期"
-                    PhoneImportStage.ERROR -> "生成二维码失败"
-                    else -> "用手机导入订阅或 OPML"
+                    PhoneImportStage.CREATING -> stringResource(R.string.phone_import_stage_creating)
+                    PhoneImportStage.WAITING -> stringResource(R.string.phone_import_stage_waiting)
+                    PhoneImportStage.REVIEW -> stringResource(R.string.phone_import_stage_review)
+                    PhoneImportStage.IMPORTING -> stringResource(R.string.phone_import_stage_importing)
+                    PhoneImportStage.SUCCESS -> stringResource(R.string.phone_import_stage_success)
+                    PhoneImportStage.EXPIRED -> stringResource(R.string.phone_import_stage_expired)
+                    PhoneImportStage.ERROR -> stringResource(R.string.phone_import_stage_error)
+                    else -> stringResource(R.string.phone_import_stage_idle)
                 },
             )
         }
@@ -1045,7 +1051,7 @@ private fun PhoneImportScreen(
             PhoneImportStage.CREATING -> item {
                 DarkCard {
                     Text(
-                        "正在生成导入会话...",
+                        stringResource(R.string.phone_import_creating_session),
                         color = WearPodTextPrimary,
                         fontSize = 14.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1070,7 +1076,7 @@ private fun PhoneImportScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                         }
                         Text(
-                            "用手机扫码导入订阅或 OPML",
+                            stringResource(R.string.phone_import_scan_hint),
                             color = WearPodTextPrimary,
                             fontSize = 13.sp,
                             modifier = Modifier.fillMaxWidth(),
@@ -1083,7 +1089,7 @@ private fun PhoneImportScreen(
                                 horizontalArrangement = Arrangement.Center,
                             ) {
                                 WatchCompactChip(
-                                    text = "短码 ${state.shortCode}",
+                                    text = stringResource(R.string.phone_short_code, state.shortCode ?: ""),
                                     highlighted = true,
                                 )
                             }
@@ -1091,7 +1097,7 @@ private fun PhoneImportScreen(
                         if (secondsRemaining != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "剩余 ${secondsRemaining}s",
+                                stringResource(R.string.phone_seconds_remaining, secondsRemaining),
                                 color = WearPodTextMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.fillMaxWidth(),
@@ -1103,7 +1109,7 @@ private fun PhoneImportScreen(
 
                 item {
                     Text(
-                        "手机提交后，手表会自动出现导入摘要。",
+                        stringResource(R.string.phone_import_waiting_hint),
                         color = WearPodTextMuted,
                         fontSize = 11.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1118,7 +1124,7 @@ private fun PhoneImportScreen(
                     item {
                         DarkCard {
                             Text(
-                                "待导入 ${preview.newCount} 个",
+                                stringResource(R.string.phone_import_ready_count, preview.newCount),
                                 color = WearPodTextPrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1131,17 +1137,17 @@ private fun PhoneImportScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 WatchMetricPill(
-                                    label = "新增",
+                                    label = stringResource(R.string.metric_new),
                                     value = preview.newCount.toString(),
                                     modifier = Modifier.weight(1f),
                                 )
                                 WatchMetricPill(
-                                    label = "重复",
+                                    label = stringResource(R.string.metric_duplicate),
                                     value = preview.duplicateCount.toString(),
                                     modifier = Modifier.weight(1f),
                                 )
                                 WatchMetricPill(
-                                    label = "无效",
+                                    label = stringResource(R.string.metric_invalid),
                                     value = preview.invalidCount.toString(),
                                     modifier = Modifier.weight(1f),
                                 )
@@ -1151,7 +1157,7 @@ private fun PhoneImportScreen(
 
                     item {
                         PillButton(
-                            text = "确认导入",
+                            text = stringResource(R.string.confirm_import),
                             background = WearPodPrimary,
                             foreground = WearPodBackground,
                             modifier = Modifier.fillMaxWidth(),
@@ -1172,7 +1178,7 @@ private fun PhoneImportScreen(
             PhoneImportStage.IMPORTING -> item {
                 DarkCard {
                     Text(
-                        "正在同步订阅到手表...",
+                        stringResource(R.string.phone_import_syncing),
                         color = WearPodTextPrimary,
                         fontSize = 14.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1185,7 +1191,7 @@ private fun PhoneImportScreen(
                 item {
                     DarkCard {
                         Text(
-                            "已导入 ${state.importedCount} 个",
+                            stringResource(R.string.phone_imported_count, state.importedCount),
                             color = WearPodTextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1198,12 +1204,12 @@ private fun PhoneImportScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             WatchMetricPill(
-                                label = "重复",
+                                label = stringResource(R.string.metric_duplicate),
                                 value = state.duplicateCountAfterImport.toString(),
                                 modifier = Modifier.weight(1f),
                             )
                             WatchMetricPill(
-                                label = "失败",
+                                label = stringResource(R.string.metric_failed),
                                 value = state.failedCount.toString(),
                                 modifier = Modifier.weight(1f),
                             )
@@ -1213,7 +1219,7 @@ private fun PhoneImportScreen(
 
                 item {
                     PillButton(
-                        text = "查看订阅",
+                        text = stringResource(R.string.view_subscriptions),
                         background = WearPodPrimary,
                         foreground = WearPodBackground,
                         modifier = Modifier.fillMaxWidth(),
@@ -1227,7 +1233,7 @@ private fun PhoneImportScreen(
             -> item {
                 DarkCard {
                     Text(
-                        state.error ?: "导入会话不可用",
+                        state.error ?: stringResource(R.string.phone_import_session_unavailable),
                         color = WearPodTextPrimary,
                         fontSize = 13.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1235,7 +1241,7 @@ private fun PhoneImportScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     PillButton(
-                        text = "重新生成二维码",
+                        text = stringResource(R.string.regenerate_qr),
                         background = WearPodSurfaceSoft,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onRetry,
@@ -1245,7 +1251,7 @@ private fun PhoneImportScreen(
 
             PhoneImportStage.IDLE -> item {
                 PillButton(
-                    text = "生成二维码",
+                    text = stringResource(R.string.generate_qr),
                     background = WearPodPrimary,
                     foreground = WearPodBackground,
                     modifier = Modifier.fillMaxWidth(),
@@ -1295,13 +1301,13 @@ private fun PhoneExportScreen(
 
         item {
             SectionTitle(
-                title = "手机导出",
+                title = stringResource(R.string.phone_export_title),
                 subtitle = when {
-                    state.stage == PhoneExportStage.CREATING -> "正在生成二维码"
-                    isExpired -> "二维码已过期"
-                    state.stage == PhoneExportStage.READY -> "用手机扫码下载 OPML"
-                    state.stage == PhoneExportStage.ERROR -> "生成二维码失败"
-                    else -> "导出订阅备份"
+                    state.stage == PhoneExportStage.CREATING -> stringResource(R.string.phone_export_stage_creating)
+                    isExpired -> stringResource(R.string.phone_export_stage_expired)
+                    state.stage == PhoneExportStage.READY -> stringResource(R.string.phone_export_stage_ready)
+                    state.stage == PhoneExportStage.ERROR -> stringResource(R.string.phone_export_stage_error)
+                    else -> stringResource(R.string.phone_export_stage_idle)
                 },
             )
         }
@@ -1310,7 +1316,7 @@ private fun PhoneExportScreen(
             state.stage == PhoneExportStage.CREATING -> item {
                 DarkCard {
                     Text(
-                        "正在准备导出会话...",
+                        stringResource(R.string.phone_export_creating_session),
                         color = WearPodTextPrimary,
                         fontSize = 14.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1335,7 +1341,7 @@ private fun PhoneExportScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                         }
                         Text(
-                            "手机扫码后直接下载 OPML",
+                            stringResource(R.string.phone_export_scan_hint),
                             color = WearPodTextPrimary,
                             fontSize = 13.sp,
                             modifier = Modifier.fillMaxWidth(),
@@ -1347,12 +1353,12 @@ private fun PhoneExportScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             WatchMetricPill(
-                                label = "订阅",
+                                label = stringResource(R.string.metric_subscriptions),
                                 value = state.outlineCount.toString(),
                                 modifier = Modifier.weight(1f),
                             )
                             WatchCompactChip(
-                                text = "短码 ${state.shortCode ?: "--"}",
+                                text = stringResource(R.string.phone_short_code, state.shortCode ?: "--"),
                                 highlighted = true,
                                 modifier = Modifier.weight(1f),
                             )
@@ -1360,7 +1366,7 @@ private fun PhoneExportScreen(
                         if (secondsRemaining != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "剩余 ${secondsRemaining}s",
+                                stringResource(R.string.phone_seconds_remaining, secondsRemaining),
                                 color = WearPodTextMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.fillMaxWidth(),
@@ -1372,7 +1378,7 @@ private fun PhoneExportScreen(
 
                 item {
                     Text(
-                        "OPML 会保存在手机，不会留在手表里。",
+                        stringResource(R.string.phone_export_saved_hint),
                         color = WearPodTextMuted,
                         fontSize = 11.sp,
                         modifier = Modifier.fillMaxWidth(),
@@ -1382,7 +1388,7 @@ private fun PhoneExportScreen(
 
                 item {
                     PillButton(
-                        text = "返回订阅",
+                        text = stringResource(R.string.back_to_subscriptions),
                         background = WearPodSurfaceSoft,
                         foreground = WearPodTextPrimary,
                         modifier = Modifier.fillMaxWidth(),
@@ -1395,7 +1401,7 @@ private fun PhoneExportScreen(
                 item {
                     DarkCard {
                         Text(
-                            state.error ?: "二维码已过期，请重新生成。",
+                            state.error ?: stringResource(R.string.phone_export_expired_error),
                             color = WearPodTextPrimary,
                             fontSize = 13.sp,
                             modifier = Modifier.fillMaxWidth(),
@@ -1403,7 +1409,7 @@ private fun PhoneExportScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         PillButton(
-                            text = "重新生成二维码",
+                            text = stringResource(R.string.regenerate_qr),
                             background = WearPodSurfaceSoft,
                             foreground = WearPodTextPrimary,
                             modifier = Modifier.fillMaxWidth(),
@@ -1414,7 +1420,7 @@ private fun PhoneExportScreen(
 
                 item {
                     PillButton(
-                        text = "返回订阅",
+                        text = stringResource(R.string.back_to_subscriptions),
                         background = WearPodPrimary,
                         foreground = WearPodBackground,
                         modifier = Modifier.fillMaxWidth(),
@@ -1425,7 +1431,7 @@ private fun PhoneExportScreen(
 
             else -> item {
                 Text(
-                    "准备导出订阅备份",
+                    stringResource(R.string.phone_export_idle_hint),
                     color = WearPodTextMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth(),
@@ -1454,6 +1460,7 @@ private fun PodcastDetailScreen(
     isRefreshing: Boolean,
     showNavigation: Boolean,
 ) {
+    val context = LocalContext.current
     val pullState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -1562,7 +1569,7 @@ private fun PodcastDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "共 ${allEpisodesCount} 期",
+                                text = stringResource(R.string.podcast_episode_count, allEpisodesCount),
                                 color = WearPodTextMuted,
                                 fontSize = 10.sp,
                                 maxLines = 1,
@@ -1579,7 +1586,7 @@ private fun PodcastDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     PillButton(
-                        text = "随机",
+                        text = stringResource(R.string.shuffle_short),
                         background = WearPodPrimary,
                         foreground = WearPodBackground,
                         textSize = 10.sp,
@@ -1597,7 +1604,7 @@ private fun PodcastDetailScreen(
                         onClick = onPlayRandom,
                     )
                     PillButton(
-                        text = "全部",
+                        text = stringResource(R.string.all_short),
                         background = Color(0xFF17141D),
                         foreground = WearPodTextPrimary,
                         textSize = 10.sp,
@@ -1623,21 +1630,21 @@ private fun PodcastDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     WatchCompactChip(
-                        text = "全部",
+                        text = stringResource(R.string.all_filter),
                         modifier = Modifier.weight(1f),
                         textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.ALL,
                         onClick = { onEpisodeFilterChange(EpisodeFilter.ALL) },
                     )
                     WatchCompactChip(
-                        text = "未播",
+                        text = stringResource(R.string.unplayed_filter),
                         modifier = Modifier.weight(1f),
                         textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.UNPLAYED,
                         onClick = { onEpisodeFilterChange(EpisodeFilter.UNPLAYED) },
                     )
                     WatchCompactChip(
-                        text = "已下",
+                        text = stringResource(R.string.downloaded_filter),
                         modifier = Modifier.weight(1f),
                         textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.DOWNLOADED,
@@ -1648,10 +1655,10 @@ private fun PodcastDetailScreen(
 
             items(episodes, key = { it.id }) { episode ->
                 val statusLabel = when (episode.downloadState) {
-                    DownloadState.DOWNLOADED -> "已缓存"
-                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> "缓存中"
-                    DownloadState.FAILED -> "下载失败"
-                    else -> if (episode.isCompleted) "已播放" else "未播放"
+                    DownloadState.DOWNLOADED -> stringResource(R.string.status_cached)
+                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> stringResource(R.string.status_caching)
+                    DownloadState.FAILED -> stringResource(R.string.status_download_failed)
+                    else -> if (episode.isCompleted) stringResource(R.string.status_played) else stringResource(R.string.status_unplayed)
                 }
                 val statusColor = when (episode.downloadState) {
                     DownloadState.DOWNLOADED -> WearPodSuccess
@@ -1681,10 +1688,10 @@ private fun PodcastDetailScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             when (episode.downloadState) {
-                                DownloadState.DOWNLOADED -> EpisodeBadge("离线", WearPodSuccess)
-                                DownloadState.QUEUED, DownloadState.DOWNLOADING -> EpisodeBadge("下载中", WearPodAccent)
-                                DownloadState.FAILED -> EpisodeBadge("失败", WearPodPrimary)
-                                else -> if (episode.isCompleted) EpisodeBadge("已播", WearPodTextMuted) else EpisodeBadge("新", Color(0xFFD56BFF))
+                                DownloadState.DOWNLOADED -> EpisodeBadge(stringResource(R.string.badge_offline), WearPodSuccess)
+                                DownloadState.QUEUED, DownloadState.DOWNLOADING -> EpisodeBadge(stringResource(R.string.badge_downloading), WearPodAccent)
+                                DownloadState.FAILED -> EpisodeBadge(stringResource(R.string.badge_failed), WearPodPrimary)
+                                else -> if (episode.isCompleted) EpisodeBadge(stringResource(R.string.badge_played), WearPodTextMuted) else EpisodeBadge(stringResource(R.string.badge_new), Color(0xFFD56BFF))
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
@@ -1750,7 +1757,7 @@ private fun PodcastDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    "${formatDurationShort(episode.durationSeconds)} • ${formatRelativeTime(episode.publishedAtEpochMillis)}",
+                                    text = "${formatDurationShort(episode.durationSeconds)} • ${formatRelativeTime(context, episode.publishedAtEpochMillis)}",
                                     color = WearPodTextMuted,
                                     fontSize = 10.sp,
                                     maxLines = 1,
@@ -1795,16 +1802,17 @@ private fun PlayerScreen(
     onClearSleepTimer: () -> Unit,
     showNavigation: Boolean,
 ) {
+    val context = LocalContext.current
     val progress = if (playerDurationMs > 0) playerPositionMs / playerDurationMs.toFloat() else 0f
     val currentTitle = playerTitle.ifBlank {
         snapshot.playbackMemory.lastEpisodeId
             ?.let { id -> snapshot.episodes.firstOrNull { it.id == id }?.title }
-            ?: "请选择节目"
+            ?: stringResource(R.string.player_choose_episode)
     }
     val progressLabel = if (playerDurationMs > 0) {
         "${formatDurationShort((playerPositionMs / 1000L).toInt())} / ${formatDurationShort((playerDurationMs / 1000L).toInt())}"
     } else {
-        "准备播放"
+        stringResource(R.string.player_ready)
     }
     val detailsListState = rememberLazyListState()
     val hideCenterPlayback by remember(detailsListState) {
@@ -1915,7 +1923,7 @@ private fun PlayerScreen(
                     ) {
                         listOf(15, 30).forEach { minutes ->
                             WatchCompactChip(
-                                text = "${minutes} 分",
+                                text = stringResource(R.string.minutes_short, minutes),
                                 modifier = Modifier.weight(1f),
                                 highlighted = sleepTimerEndsAtEpochMillis != null && sleepTimerPresetMinutes == minutes,
                                 onClick = { onStartSleepTimer(minutes) },
@@ -1927,13 +1935,13 @@ private fun PlayerScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         WatchCompactChip(
-                            text = "60 分",
+                            text = stringResource(R.string.minutes_short, 60),
                             modifier = Modifier.weight(1f),
                             highlighted = sleepTimerEndsAtEpochMillis != null && sleepTimerPresetMinutes == 60,
                             onClick = { onStartSleepTimer(60) },
                         )
                         WatchCompactChip(
-                            text = "关闭",
+                            text = stringResource(R.string.off),
                             modifier = Modifier.weight(1f),
                             highlighted = sleepTimerEndsAtEpochMillis == null,
                             onClick = onClearSleepTimer,
@@ -1948,7 +1956,7 @@ private fun PlayerScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         WatchCompactChip(
-                            text = "当前队列(${queue.size})",
+                            text = stringResource(R.string.queue_count, queue.size),
                             highlighted = true,
                         )
                     }
@@ -2026,7 +2034,7 @@ private fun PlayerScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = item.title.ifBlank { "未命名节目" },
+                                    text = item.title.ifBlank { stringResource(R.string.untitled_episode) },
                                     color = WearPodTextPrimary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -2038,7 +2046,7 @@ private fun PlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isCurrent) "正在播放" else item.subtitle.ifBlank { "点按切换" },
+                                    text = if (isCurrent) stringResource(R.string.now_playing) else item.subtitle.ifBlank { stringResource(R.string.tap_to_switch) },
                                     color = if (isCurrent) WearPodPrimarySoft else WearPodTextMuted,
                                     fontSize = 10.sp,
                                     fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
@@ -2265,8 +2273,8 @@ private fun DownloadsScreen(
     val availableBytes = context.filesDir.usableSpace.coerceAtLeast(0L)
     val maxBytes = 1_500L * 1024L * 1024L
     val storageWarning = when {
-        availableBytes < 256L * 1024L * 1024L -> "剩余空间偏低，建议尽快清理缓存"
-        usedBytes >= (maxBytes * 0.85f).toLong() -> "离线缓存较多，可以删掉已播节目"
+        availableBytes < 256L * 1024L * 1024L -> stringResource(R.string.storage_low_warning)
+        usedBytes >= (maxBytes * 0.85f).toLong() -> stringResource(R.string.storage_heavy_warning)
         else -> null
     }
     val downloadedGroups = downloadedEpisodes
@@ -2306,7 +2314,7 @@ private fun DownloadsScreen(
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "离线",
+                        text = stringResource(R.string.downloads_title),
                         color = WearPodPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -2321,7 +2329,7 @@ private fun DownloadsScreen(
                     )
                 }
             } else {
-                RootScreenHeader(title = "离线")
+                RootScreenHeader(title = stringResource(R.string.downloads_title))
             }
         }
 
@@ -2331,12 +2339,12 @@ private fun DownloadsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 WatchMetricPill(
-                    label = "已下载",
-                    value = "${downloadedEpisodes.size} 集",
+                    label = stringResource(R.string.downloads_metric_downloaded),
+                    value = stringResource(R.string.downloads_metric_downloaded_value, downloadedEpisodes.size),
                     modifier = Modifier.weight(1f),
                 )
                 WatchMetricPill(
-                    label = "可用",
+                    label = stringResource(R.string.downloads_metric_available),
                     value = formatBytes(availableBytes),
                     modifier = Modifier.weight(1f),
                 )
@@ -2374,7 +2382,7 @@ private fun DownloadsScreen(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 WatchCompactChip(
-                    text = "下载与刷新",
+                    text = stringResource(R.string.downloads_and_refresh),
                     leading = {
                         Icon(
                             Icons.Rounded.Settings,
@@ -2395,7 +2403,7 @@ private fun DownloadsScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     WatchCompactChip(
-                        text = "下载失败(${failedEpisodes.size})",
+                        text = stringResource(R.string.download_failed_count, failedEpisodes.size),
                         highlighted = true,
                     )
                 }
@@ -2404,7 +2412,7 @@ private fun DownloadsScreen(
             items(failedEpisodes, key = { "failed-${it.id}" }) { episode ->
                 WatchChip(
                     title = episode.title,
-                    subtitle = "下载失败 • 点按重试",
+                    subtitle = stringResource(R.string.download_failed_retry_hint),
                     prominent = true,
                     leading = {
                         ArtworkThumb(episode.artworkUrl, modifier = Modifier.size(40.dp))
@@ -2429,7 +2437,7 @@ private fun DownloadsScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     WatchCompactChip(
-                        text = "下载队列(${queuedEpisodes.size})",
+                        text = stringResource(R.string.download_queue_count, queuedEpisodes.size),
                         highlighted = true,
                     )
                 }
@@ -2441,10 +2449,10 @@ private fun DownloadsScreen(
                         val sizeText = episode.sizeBytes?.takeIf { it > 0 }?.let { total ->
                             "${formatBytes(episode.downloadedBytes)} / ${formatBytes(total)}"
                         } ?: formatBytes(episode.downloadedBytes)
-                        "下载中 • $sizeText • 点按取消"
+                        stringResource(R.string.downloading_with_size, sizeText)
                     }
 
-                    else -> "排队中 • 点按取消"
+                    else -> "${stringResource(R.string.queued_status)} • ${stringResource(R.string.tap_to_cancel)}"
                 }
                 WatchChip(
                     title = episode.title,
@@ -2472,7 +2480,7 @@ private fun DownloadsScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     WatchCompactChip(
-                        text = "已下载(${downloadedEpisodes.size})",
+                        text = stringResource(R.string.downloaded_count, downloadedEpisodes.size),
                         highlighted = true,
                     )
                 }
@@ -2485,7 +2493,7 @@ private fun DownloadsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     WatchCompactChip(
-                        text = "清空全部",
+                        text = stringResource(R.string.clear_all),
                         leading = {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
@@ -2498,7 +2506,7 @@ private fun DownloadsScreen(
                     )
                     if (completedDownloadedEpisodes.isNotEmpty()) {
                         WatchCompactChip(
-                            text = "删除已播(${completedDownloadedEpisodes.size})",
+                            text = stringResource(R.string.delete_played_count, completedDownloadedEpisodes.size),
                             leading = {
                                 Icon(
                                     Icons.Rounded.Done,
@@ -2520,7 +2528,7 @@ private fun DownloadsScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         WatchCompactChip(
-                            text = "按播客清理",
+                            text = stringResource(R.string.clear_by_podcast),
                             highlighted = true,
                         )
                     }
@@ -2529,7 +2537,11 @@ private fun DownloadsScreen(
                 items(downloadedGroups, key = { "cleanup-${it.subscriptionId}" }) { group ->
                     WatchChip(
                         title = group.title,
-                        subtitle = "${group.episodeCount} 集 • ${formatBytes(group.totalBytes)}",
+                        subtitle = stringResource(
+                            R.string.download_group_subtitle,
+                            group.episodeCount,
+                            formatBytes(group.totalBytes),
+                        ),
                         leading = {
                             Box(
                                 modifier = Modifier
@@ -2568,7 +2580,11 @@ private fun DownloadsScreen(
                         .padding(top = 32.dp, bottom = 24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("还没有下载任务", color = WearPodTextMuted, textAlign = TextAlign.Center)
+                    Text(
+                        text = stringResource(R.string.no_download_tasks),
+                        color = WearPodTextMuted,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         } else {
@@ -2597,12 +2613,14 @@ private fun DownloadsScreen(
 @Composable
 private fun DownloadSettingsScreen(
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
+    languagePreference: AppLanguage,
     onSetWifiOnly: (Boolean) -> Unit,
     onSetAutoDownloadCount: (Int) -> Unit,
     onSetBackgroundAutoDownload: (Boolean) -> Unit,
     onSetBackgroundRefreshEnabled: (Boolean) -> Unit,
     onSetBackgroundRefreshInterval: (Int) -> Unit,
     onSetAutoDeletePlayedDownloads: (Boolean) -> Unit,
+    onSetLanguage: (AppLanguage) -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     val settings = snapshot.downloadSettings
@@ -2619,12 +2637,15 @@ private fun DownloadSettingsScreen(
             }
         }
         item {
-            SectionTitle(title = "下载与刷新", subtitle = "网络与后台")
+            SectionTitle(
+                title = stringResource(R.string.download_settings_title),
+                subtitle = stringResource(R.string.settings_subtitle),
+            )
         }
         item {
             WatchChip(
-                title = "仅 Wi‑Fi 下载",
-                subtitle = if (settings.wifiOnly) "已开启" else "任意网络",
+                title = stringResource(R.string.wifi_only_downloads),
+                subtitle = if (settings.wifiOnly) stringResource(R.string.enabled) else stringResource(R.string.any_network),
                 prominent = settings.wifiOnly,
                 leading = {
                     Box(
@@ -2635,7 +2656,7 @@ private fun DownloadSettingsScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (settings.wifiOnly) "Wi‑Fi" else "网络",
+                            text = if (settings.wifiOnly) "Wi-Fi" else stringResource(R.string.network_short),
                             color = if (settings.wifiOnly) WearPodBackground else WearPodTextPrimary,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -2647,8 +2668,12 @@ private fun DownloadSettingsScreen(
         }
         item {
             WatchChip(
-                title = "后台自动下载",
-                subtitle = if (settings.backgroundAutoDownloadEnabled) "刷新后自动下" else "仅手动下载",
+                title = stringResource(R.string.background_auto_download),
+                subtitle = if (settings.backgroundAutoDownloadEnabled) {
+                    stringResource(R.string.auto_download_after_refresh)
+                } else {
+                    stringResource(R.string.manual_download_only)
+                },
                 prominent = settings.backgroundAutoDownloadEnabled,
                 leading = {
                     Box(
@@ -2659,7 +2684,11 @@ private fun DownloadSettingsScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (settings.backgroundAutoDownloadEnabled) "自动" else "手动",
+                            text = if (settings.backgroundAutoDownloadEnabled) {
+                                stringResource(R.string.auto_short)
+                            } else {
+                                stringResource(R.string.manual_short)
+                            },
                             color = if (settings.backgroundAutoDownloadEnabled) WearPodBackground else WearPodTextPrimary,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -2671,8 +2700,12 @@ private fun DownloadSettingsScreen(
         }
         item {
             WatchChip(
-                title = "自动清理已播",
-                subtitle = if (settings.autoDeletePlayedDownloads) "已播后自动删" else "保留已播缓存",
+                title = stringResource(R.string.auto_delete_played),
+                subtitle = if (settings.autoDeletePlayedDownloads) {
+                    stringResource(R.string.auto_delete_after_played)
+                } else {
+                    stringResource(R.string.keep_played_cache)
+                },
                 prominent = settings.autoDeletePlayedDownloads,
                 leading = {
                     Box(
@@ -2695,7 +2728,7 @@ private fun DownloadSettingsScreen(
         }
         item {
             Text(
-                text = "自动下载最新",
+                text = stringResource(R.string.auto_download_latest),
                 color = WearPodTextMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth(),
@@ -2705,8 +2738,8 @@ private fun DownloadSettingsScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    listOf(0 to "关闭", 1 to "1 期"),
-                    listOf(2 to "2 期", 3 to "3 期"),
+                    listOf(0 to stringResource(R.string.off), 1 to stringResource(R.string.episode_count_short, 1)),
+                    listOf(2 to stringResource(R.string.episode_count_short, 2), 3 to stringResource(R.string.episode_count_short, 3)),
                 ).forEach { rowOptions ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2726,11 +2759,11 @@ private fun DownloadSettingsScreen(
         }
         item {
             WatchChip(
-                title = "后台定时刷新",
+                title = stringResource(R.string.background_scheduled_refresh),
                 subtitle = if (settings.backgroundRefreshEnabled) {
-                    "每 ${settings.backgroundRefreshIntervalHours}H 刷新"
+                    stringResource(R.string.refresh_every_h, settings.backgroundRefreshIntervalHours)
                 } else {
-                    "已关闭"
+                    stringResource(R.string.disabled)
                 },
                 prominent = settings.backgroundRefreshEnabled,
                 leading = {
@@ -2754,7 +2787,7 @@ private fun DownloadSettingsScreen(
         }
         item {
             Text(
-                text = "后台刷新频率",
+                text = stringResource(R.string.background_refresh_frequency),
                 color = WearPodTextMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth(),
@@ -2777,9 +2810,49 @@ private fun DownloadSettingsScreen(
             }
         }
         item {
+            Text(
+                text = stringResource(R.string.language_title),
+                color = WearPodTextMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    WatchCompactChip(
+                        text = stringResource(R.string.language_follow_system),
+                        modifier = Modifier.weight(1f),
+                        highlighted = languagePreference == AppLanguage.SYSTEM,
+                        onClick = { onSetLanguage(AppLanguage.SYSTEM) },
+                    )
+                    WatchCompactChip(
+                        text = stringResource(R.string.language_simplified_chinese),
+                        modifier = Modifier.weight(1f),
+                        highlighted = languagePreference == AppLanguage.ZH_CN,
+                        onClick = { onSetLanguage(AppLanguage.ZH_CN) },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    WatchCompactChip(
+                        text = stringResource(R.string.language_english),
+                        highlighted = languagePreference == AppLanguage.ENGLISH,
+                        onClick = { onSetLanguage(AppLanguage.ENGLISH) },
+                    )
+                }
+            }
+        }
+        item {
             WatchChip(
-                title = "关于",
-                subtitle = "版本与支持",
+                title = stringResource(R.string.about_entry_title),
+                subtitle = stringResource(R.string.about_entry_subtitle),
                 leading = {
                     Icon(
                         Icons.Rounded.Info,
@@ -2817,20 +2890,23 @@ private fun AboutScreen() {
             }
         }
         item {
-            SectionTitle(title = "关于 WearPod", subtitle = "版本与支持信息")
+            SectionTitle(
+                title = stringResource(R.string.about_title),
+                subtitle = stringResource(R.string.about_page_subtitle),
+            )
         }
         item {
             DarkCard {
-                AboutInfoRow(label = "应用", value = "WearPod")
-                AboutInfoRow(label = "版本", value = BuildConfig.VERSION_NAME)
-                AboutInfoRow(label = "经营主体", value = "广州舜健科技有限公司")
-                AboutInfoRow(label = "包名", value = BuildConfig.APPLICATION_ID, marquee = true)
+                AboutInfoRow(label = stringResource(R.string.about_label_app), value = stringResource(R.string.about_app_name))
+                AboutInfoRow(label = stringResource(R.string.about_label_version), value = BuildConfig.VERSION_NAME)
+                AboutInfoRow(label = stringResource(R.string.about_label_company), value = stringResource(R.string.about_company_name))
+                AboutInfoRow(label = stringResource(R.string.about_label_package), value = BuildConfig.APPLICATION_ID, marquee = true)
             }
         }
         item {
             DarkCard {
                 Text(
-                    text = "独立运行的 Wear OS 播客播放器，支持 RSS 导入、二维码手机导入导出、离线下载与手表端独立收听。",
+                    text = stringResource(R.string.about_description),
                     color = WearPodTextPrimary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -2839,16 +2915,16 @@ private fun AboutScreen() {
         }
         item {
             DarkCard {
-                AboutInfoRow(label = "官网", value = "wearpod.linsblog.cn", marquee = true)
-                AboutInfoRow(label = "联系邮箱", value = "chenfyuanl@gmail.com", marquee = true)
-                AboutInfoRow(label = "客服渠道", value = "chenfyuanl@gmail.com", marquee = true)
-                AboutInfoRow(label = "隐私生效", value = "2026-03-30")
+                AboutInfoRow(label = stringResource(R.string.about_label_website), value = stringResource(R.string.about_website_value), marquee = true)
+                AboutInfoRow(label = stringResource(R.string.about_label_contact_email), value = stringResource(R.string.about_contact_email_value), marquee = true)
+                AboutInfoRow(label = stringResource(R.string.about_label_support_channel), value = stringResource(R.string.about_support_channel_value), marquee = true)
+                AboutInfoRow(label = stringResource(R.string.about_label_privacy_effective), value = stringResource(R.string.about_privacy_effective_value))
             }
         }
         item {
             DarkCard {
                 Text(
-                    text = "WearPod 支持扫码导入、二维码导出、离线收听与手表端独立播放。隐私政策与联系信息已同步到官网页面。",
+                    text = stringResource(R.string.about_footer),
                     color = WearPodTextMuted,
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
@@ -2896,12 +2972,13 @@ private data class DownloadedSubscriptionGroup(
     val totalBytes: Long,
 )
 
+@Composable
 private fun compactAudioOutputLabel(audioOutput: AudioOutputSnapshot): String = when (audioOutput.kind) {
-    AudioOutputKind.SPEAKER -> "外放"
-    AudioOutputKind.BLUETOOTH -> "蓝牙"
-    AudioOutputKind.WIRED -> "有线"
-    AudioOutputKind.REMOTE -> "外部"
-    AudioOutputKind.OTHER -> audioOutput.label.ifBlank { "输出" }
+    AudioOutputKind.SPEAKER -> stringResource(R.string.audio_output_compact_speaker)
+    AudioOutputKind.BLUETOOTH -> stringResource(R.string.audio_output_compact_bluetooth)
+    AudioOutputKind.WIRED -> stringResource(R.string.audio_output_compact_wired)
+    AudioOutputKind.REMOTE -> stringResource(R.string.audio_output_compact_remote)
+    AudioOutputKind.OTHER -> audioOutput.label.ifBlank { stringResource(R.string.audio_output_compact_generic) }
 }
 
 @Composable
@@ -2916,11 +2993,11 @@ private fun rememberSleepTimerLabel(
         }
     }
     return if (endsAtEpochMillis == null) {
-        "睡眠定时"
+        stringResource(R.string.sleep_timer)
     } else {
         val remainingMs = (endsAtEpochMillis - now).coerceAtLeast(0L)
         val remainingMinutes = ((remainingMs + 59_999L) / 60_000L).coerceAtLeast(1L)
-        "睡眠剩余 ${remainingMinutes} 分"
+        stringResource(R.string.sleep_minutes_remaining, remainingMinutes)
     }
 }
 

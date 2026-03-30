@@ -96,6 +96,7 @@ class WearPodStore(context: Context) {
             },
             favoriteSubscriptionIds = dao.favoriteSubscriptionIds().toSet(),
             playbackMemory = preferences.playbackMemory,
+            hasCompletedAudioOutputSetup = preferences.hasCompletedAudioOutputSetup,
             downloadSettings = preferences.downloadSettings,
             sleepTimer = preferences.sleepTimer,
         )
@@ -161,6 +162,7 @@ class WearPodStore(context: Context) {
         preferencesStore.write(
             WearPodPreferencesSnapshot(
                 playbackMemory = snapshot.playbackMemory,
+                hasCompletedAudioOutputSetup = snapshot.hasCompletedAudioOutputSetup,
                 downloadSettings = snapshot.downloadSettings,
                 sleepTimer = snapshot.sleepTimer,
             ),

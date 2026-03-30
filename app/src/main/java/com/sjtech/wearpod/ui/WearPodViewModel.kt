@@ -1,17 +1,24 @@
 package com.sjtech.wearpod.ui
 
+import android.content.Context
 import com.sjtech.wearpod.core.NetworkStatusMonitor
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sjtech.wearpod.R
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.PhoneImportPreview
 import com.sjtech.wearpod.data.model.PhoneImportSessionStatus
 import com.sjtech.wearpod.data.repository.WearPodRepository
 import com.sjtech.wearpod.download.EpisodeDownloadScheduler
+import com.sjtech.wearpod.playback.AudioOutputKind
 import com.sjtech.wearpod.playback.AudioOutputController
+import com.sjtech.wearpod.playback.AudioOutputSnapshot
 import com.sjtech.wearpod.playback.PlayerGateway
 import com.sjtech.wearpod.playback.VolumeController
 import java.io.IOException
@@ -38,6 +45,20 @@ enum class EpisodeFilter {
     ALL,
     UNPLAYED,
     DOWNLOADED,
+}
+
+enum class AppLanguage(val languageTag: String?) {
+    SYSTEM(null),
+    ZH_CN("zh-CN"),
+    ENGLISH("en");
+
+    companion object {
+        fun fromLanguageTags(tags: String): AppLanguage = when {
+            tags.startsWith("zh", ignoreCase = true) -> ZH_CN
+            tags.startsWith("en", ignoreCase = true) -> ENGLISH
+            else -> SYSTEM
+        }
+    }
 }
 
 enum class PhoneImportStage {
@@ -82,6 +103,7 @@ data class PhoneExportUiState(
 )
 
 class WearPodViewModel(
+    private val appContext: Context,
     val repository: WearPodRepository,
     val playerGateway: PlayerGateway,
     private val audioOutputController: AudioOutputController,
@@ -93,6 +115,7 @@ class WearPodViewModel(
     private var phoneImportCreateJob: Job? = null
     private var phoneImportPollJob: Job? = null
     private var phoneExportCreateJob: Job? = null
+    private var lastObservedAudioOutput: AudioOutputSnapshot? = null
 
     var currentScreen by mutableStateOf<WearPodScreen>(WearPodScreen.Home)
         private set
@@ -114,12 +137,19 @@ class WearPodViewModel(
         private set
     var phoneExportState by mutableStateOf(PhoneExportUiState())
         private set
+    var languagePreference by mutableStateOf(resolveLanguagePreference())
+        private set
 
     val snapshot = repository.snapshot
     val playerState = playerGateway.playerState
     val audioOutputState = audioOutputController.state
     val volumeState = volumeController.state
     val isOnline = networkStatusMonitor.isOnline
+
+    private fun text(@StringRes id: Int, vararg args: Any): String = appContext.getString(id, *args)
+
+    private fun resolveLanguagePreference(): AppLanguage =
+        AppLanguage.fromLanguageTags(AppCompatDelegate.getApplicationLocales().toLanguageTags())
 
     fun openRoot(screen: WearPodScreen) {
         clearPhoneBridgeStateForNavigation()
@@ -144,17 +174,29 @@ class WearPodViewModel(
         push(WearPodScreen.About)
     }
 
+    fun syncLanguagePreference() {
+        languagePreference = resolveLanguagePreference()
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        if (languagePreference == language) return
+        val locales = language.languageTag?.let(LocaleListCompat::forLanguageTags)
+            ?: LocaleListCompat.getEmptyLocaleList()
+        AppCompatDelegate.setApplicationLocales(locales)
+        languagePreference = language
+    }
+
     fun openImport() {
         openPhoneImport()
     }
 
     fun openPhoneImport() {
         if (!repository.isPhoneImportAvailable()) {
-            showBanner("手机导入服务未配置")
+            showBanner(text(R.string.banner_phone_import_service_unavailable))
             return
         }
         if (!isOnline.value) {
-            showBanner("当前无网络，手机导入需要联网")
+            showBanner(text(R.string.banner_phone_import_requires_network))
             return
         }
         push(WearPodScreen.PhoneImport)
@@ -163,15 +205,15 @@ class WearPodViewModel(
 
     fun openPhoneExport() {
         if (!repository.isPhoneImportAvailable()) {
-            showBanner("手机导出服务未配置")
+            showBanner(text(R.string.banner_phone_export_service_unavailable))
             return
         }
         if (snapshot.value.subscriptions.isEmpty()) {
-            showBanner("当前没有可导出的订阅")
+            showBanner(text(R.string.banner_no_exportable_subscriptions))
             return
         }
         if (!isOnline.value) {
-            showBanner("当前无网络，手机导出需要联网")
+            showBanner(text(R.string.banner_phone_export_requires_network))
             return
         }
         push(WearPodScreen.PhoneExport)
@@ -239,7 +281,7 @@ class WearPodViewModel(
                 duplicateCountAfterImport = result.duplicateCount,
                 failedCount = result.failedUrls.size,
             )
-            showBanner("已导入 ${result.importedSubscriptions.size} 个订阅")
+            showBanner(text(R.string.banner_imported_subscriptions, result.importedSubscriptions.size))
         }
     }
 
@@ -256,9 +298,9 @@ class WearPodViewModel(
             val failedCount = snapshot.value.subscriptions.count { !it.lastRefreshError.isNullOrBlank() }
             showBanner(
                 if (failedCount > 0) {
-                    "${failedCount} 个订阅刷新失败"
+                    text(R.string.banner_refresh_failed_count, failedCount)
                 } else {
-                    "已刷新订阅"
+                    text(R.string.banner_subscriptions_refreshed)
                 },
             )
         }
@@ -266,7 +308,7 @@ class WearPodViewModel(
 
     fun requestUnsubscribe(subscriptionId: String) {
         pendingUnsubscribeId = subscriptionId
-        showBanner("长按后点确认取消订阅")
+        showBanner(text(R.string.banner_long_press_unsubscribe))
     }
 
     fun dismissUnsubscribeRequest() {
@@ -288,7 +330,7 @@ class WearPodViewModel(
                 back()
             }
             pendingUnsubscribeId = null
-            showBanner("已取消 ${subscription.title}")
+            showBanner(text(R.string.banner_unsubscribed_show, subscription.title))
         }
     }
 
@@ -298,9 +340,9 @@ class WearPodViewModel(
             try {
                 repository.refreshSubscription(subscriptionId)
                 enqueueAutoDownloads(subscriptionId)
-                showBanner("节目已更新")
+                showBanner(text(R.string.banner_episodes_updated))
             } catch (throwable: Throwable) {
-                showBanner(throwable.message ?: "刷新失败")
+                showBanner(throwable.message ?: text(R.string.refresh_failed))
             }
             refreshingSubscriptionId = null
         }
@@ -312,9 +354,9 @@ class WearPodViewModel(
             try {
                 repository.refreshSubscription(subscriptionId)
                 enqueueAutoDownloads(subscriptionId)
-                showBanner("重试成功")
+                showBanner(text(R.string.banner_retry_success))
             } catch (throwable: Throwable) {
-                showBanner(throwable.message ?: "重试失败")
+                showBanner(throwable.message ?: text(R.string.banner_retry_failed))
             }
             retryingSubscriptionId = null
         }
@@ -339,9 +381,9 @@ class WearPodViewModel(
             repository.setEpisodeCompleted(episode.id, completed)
             showBanner(
                 when {
-                    completed && autoDeletedDownload -> "已标记已播并清理离线"
-                    completed -> "已标记已播"
-                    else -> "已标记未播"
+                    completed && autoDeletedDownload -> text(R.string.banner_marked_played_and_cleared)
+                    completed -> text(R.string.banner_marked_played)
+                    else -> text(R.string.banner_marked_unplayed)
                 },
             )
         }
@@ -352,7 +394,10 @@ class WearPodViewModel(
             repository.updateDownloadSettings { settings ->
                 settings.copy(wifiOnly = enabled)
             }
-            showBanner(if (enabled) "仅 Wi‑Fi 下载" else "允许任意网络下载")
+            showBanner(
+                if (enabled) text(R.string.banner_wifi_only_downloads)
+                else text(R.string.banner_any_network_downloads),
+            )
         }
     }
 
@@ -363,9 +408,9 @@ class WearPodViewModel(
             }
             showBanner(
                 if (count <= 0) {
-                    "已关闭自动下载"
+                    text(R.string.banner_auto_download_off)
                 } else {
-                    "自动下载最新 ${count.coerceIn(0, 3)} 期"
+                    text(R.string.banner_auto_download_latest, count.coerceIn(0, 3))
                 },
             )
         }
@@ -376,7 +421,10 @@ class WearPodViewModel(
             repository.updateDownloadSettings { settings ->
                 settings.copy(backgroundAutoDownloadEnabled = enabled)
             }
-            showBanner(if (enabled) "已开启后台自动下载" else "已关闭后台自动下载")
+            showBanner(
+                if (enabled) text(R.string.banner_background_auto_download_on)
+                else text(R.string.banner_background_auto_download_off),
+            )
         }
     }
 
@@ -385,7 +433,10 @@ class WearPodViewModel(
             repository.updateDownloadSettings { settings ->
                 settings.copy(backgroundRefreshEnabled = enabled)
             }
-            showBanner(if (enabled) "已开启后台定时刷新" else "已关闭后台定时刷新")
+            showBanner(
+                if (enabled) text(R.string.banner_background_refresh_on)
+                else text(R.string.banner_background_refresh_off),
+            )
         }
     }
 
@@ -401,7 +452,7 @@ class WearPodViewModel(
                     backgroundRefreshIntervalHours = normalizedHours,
                 )
             }
-            showBanner("改为每 ${normalizedHours} 小时后台刷新")
+            showBanner(text(R.string.banner_background_refresh_every_h, normalizedHours))
         }
     }
 
@@ -410,7 +461,10 @@ class WearPodViewModel(
             repository.updateDownloadSettings { settings ->
                 settings.copy(autoDeletePlayedDownloads = enabled)
             }
-            showBanner(if (enabled) "已开启自动清理已播" else "已关闭自动清理已播")
+            showBanner(
+                if (enabled) text(R.string.banner_auto_delete_played_on)
+                else text(R.string.banner_auto_delete_played_off),
+            )
         }
     }
 
@@ -425,13 +479,27 @@ class WearPodViewModel(
         val subscription = repository.subscription(subscriptionId) ?: return
         if (!ensureEpisodeCanPlay(episodeId)) return
         val episodes = repository.episodesForSubscription(subscriptionId)
+        if (maybeOpenAudioOutputSwitcherBeforePlayback()) {
+            return
+        }
+        playEpisodes(subscription.title, episodes, episodeId, shuffleQueue = false)
+    }
+
+    private fun playEpisodes(
+        subscriptionTitle: String,
+        episodes: List<Episode>,
+        startEpisodeId: String,
+        shuffleQueue: Boolean,
+    ) {
         viewModelScope.launch {
             playerGateway.playEpisodes(
                 episodes = episodes,
-                startEpisodeId = episodeId,
-                subscriptionTitle = subscription.title,
+                startEpisodeId = startEpisodeId,
+                subscriptionTitle = subscriptionTitle,
+                shuffleQueue = shuffleQueue,
             )
             volumeController.refresh()
+            audioOutputController.refresh().also { lastObservedAudioOutput = it }
             push(WearPodScreen.Player)
         }
     }
@@ -444,22 +512,16 @@ class WearPodViewModel(
                 episodes
             } else {
                 episodes.filter { repository.isEpisodeAvailableOffline(it.id) }
-            }
+        }
         if (playableEpisodes.isEmpty()) {
-            showBanner("当前无网络，请先下载离线音频")
+            showBanner(text(R.string.banner_offline_audio_required))
             return
         }
         val startEpisode = playableEpisodes.randomOrNull() ?: return
-        viewModelScope.launch {
-            playerGateway.playEpisodes(
-                episodes = playableEpisodes,
-                startEpisodeId = startEpisode.id,
-                subscriptionTitle = subscription.title,
-                shuffleQueue = true,
-            )
-            volumeController.refresh()
-            push(WearPodScreen.Player)
+        if (maybeOpenAudioOutputSwitcherBeforePlayback()) {
+            return
         }
+        playEpisodes(subscription.title, playableEpisodes, startEpisode.id, shuffleQueue = true)
     }
 
     fun queueEpisodeDownload(episode: Episode) {
@@ -467,7 +529,7 @@ class WearPodViewModel(
             when (episode.downloadState) {
                 com.sjtech.wearpod.data.model.DownloadState.DOWNLOADED -> {
                     repository.deleteDownloadedEpisode(episode.id)
-                    showBanner("已删除离线音频")
+                    showBanner(text(R.string.banner_deleted_offline_audio))
                 }
 
                 com.sjtech.wearpod.data.model.DownloadState.QUEUED,
@@ -475,12 +537,12 @@ class WearPodViewModel(
                 -> {
                     downloadScheduler.cancelEpisode(episode.id)
                     repository.resetEpisodeDownload(episode.id)
-                    showBanner("已取消下载")
+                    showBanner(text(R.string.banner_download_canceled))
                 }
 
                 else -> {
                     downloadScheduler.enqueueEpisode(episode)
-                    showBanner("已加入下载队列")
+                    showBanner(text(R.string.banner_added_to_download_queue))
                 }
             }
         }
@@ -494,7 +556,7 @@ class WearPodViewModel(
             }
         viewModelScope.launch {
             downloadScheduler.enqueueAll(episodes)
-            showBanner("开始下载 ${episodes.size} 期")
+            showBanner(text(R.string.banner_start_downloading_count, episodes.size))
         }
     }
 
@@ -502,7 +564,7 @@ class WearPodViewModel(
         viewModelScope.launch {
             downloadScheduler.cancelAll()
             repository.clearAllDownloads()
-            showBanner("缓存已清空")
+            showBanner(text(R.string.banner_cache_cleared))
         }
     }
 
@@ -511,9 +573,9 @@ class WearPodViewModel(
             val removedCount = repository.clearCompletedDownloads()
             showBanner(
                 if (removedCount > 0) {
-                    "已清理 ${removedCount} 集已播缓存"
+                    text(R.string.banner_cleared_played_downloads, removedCount)
                 } else {
-                    "没有可清理的已播缓存"
+                    text(R.string.banner_no_played_downloads)
                 },
             )
         }
@@ -525,9 +587,9 @@ class WearPodViewModel(
             val removedCount = repository.clearDownloadsForSubscription(subscriptionId)
             showBanner(
                 if (removedCount > 0) {
-                    "已清理 ${subscription.title}"
+                    text(R.string.banner_cleared_subscription_cache, subscription.title)
                 } else {
-                    "${subscription.title} 没有离线缓存"
+                    text(R.string.banner_no_subscription_cache, subscription.title)
                 },
             )
         }
@@ -537,6 +599,9 @@ class WearPodViewModel(
         if (!playerState.value.isPlaying) {
             val episodeId = playerState.value.episodeId
             if (episodeId != null && !ensureEpisodeCanPlay(episodeId)) {
+                return
+            }
+            if (maybeOpenAudioOutputSwitcherBeforePlayback()) {
                 return
             }
         }
@@ -585,14 +650,14 @@ class WearPodViewModel(
     fun startSleepTimer(minutes: Int) {
         viewModelScope.launch {
             playerGateway.startSleepTimer(minutes)
-            showBanner("${minutes} 分钟后暂停")
+            showBanner(text(R.string.banner_sleep_timer_after_minutes, minutes))
         }
     }
 
     fun clearSleepTimer() {
         viewModelScope.launch {
             playerGateway.clearSleepTimer()
-            showBanner("已关闭睡眠定时")
+            showBanner(text(R.string.banner_sleep_timer_off))
         }
     }
 
@@ -601,7 +666,12 @@ class WearPodViewModel(
     }
 
     fun syncAudioOutput() {
-        audioOutputController.refresh()
+        val refreshed = audioOutputController.refresh()
+        val previous = lastObservedAudioOutput
+        if (previous != null && previous != refreshed && playerState.value.hasMedia) {
+            showBanner(audioOutputChangedMessage(refreshed))
+        }
+        lastObservedAudioOutput = refreshed
     }
 
     fun syncNetworkStatus() {
@@ -723,7 +793,7 @@ class WearPodViewModel(
                     PhoneImportSessionStatus.EXPIRED -> {
                         phoneImportState = phoneImportState.copy(
                             stage = PhoneImportStage.EXPIRED,
-                            error = "二维码已过期",
+                            error = text(R.string.banner_qr_expired),
                         )
                         phoneImportPollJob?.cancel()
                     }
@@ -787,11 +857,31 @@ class WearPodViewModel(
         }
     }
 
+    private fun maybeOpenAudioOutputSwitcherBeforePlayback(): Boolean {
+        if (snapshot.value.hasCompletedAudioOutputSetup) {
+            return false
+        }
+
+        val currentOutput = audioOutputController.refresh().also { lastObservedAudioOutput = it }
+        viewModelScope.launch {
+            repository.markAudioOutputSetupCompleted()
+        }
+        audioOutputController.showSystemOutputSwitcher()
+        showBanner(
+            if (currentOutput.isExternal) {
+                text(R.string.banner_continue_playback_switch_if_needed)
+            } else {
+                text(R.string.banner_choose_output_first)
+            },
+        )
+        return true
+    }
+
     private fun ensureEpisodeCanPlay(episodeId: String): Boolean {
         if (isOnline.value || repository.isEpisodeAvailableOffline(episodeId)) {
             return true
         }
-        showBanner("当前无网络，请先下载离线音频")
+        showBanner(text(R.string.banner_offline_audio_required))
         return false
     }
 
@@ -801,9 +891,9 @@ class WearPodViewModel(
     ): String {
         if (!isOnline.value) {
             return if (creating) {
-                "当前无网络，手机导入需要联网"
+                text(R.string.banner_phone_import_requires_network)
             } else {
-                "网络已断开，等待恢复后重试"
+                text(R.string.banner_network_disconnected_wait_retry)
             }
         }
         val message = throwable.message.orEmpty()
@@ -816,25 +906,38 @@ class WearPodViewModel(
                 message.contains("validation", ignoreCase = true) ||
                 message.contains("ssl", ignoreCase = true) ->
                 if (creating) {
-                    "手机导入服务连接失败，请稍后再试"
+                    text(R.string.banner_phone_import_connection_failed)
                 } else {
-                    "导入服务连接中断，请重试"
+                    text(R.string.banner_phone_import_interrupted)
                 }
 
-            else -> throwable.message ?: if (creating) "创建二维码失败" else "获取导入状态失败"
+            else -> throwable.message ?: if (creating) {
+                text(R.string.banner_create_qr_failed)
+            } else {
+                text(R.string.banner_fetch_import_status_failed)
+            }
         }
     }
 
     private fun friendlyExportErrorMessage(throwable: Throwable): String {
         if (!isOnline.value) {
-            return "当前无网络，手机导出需要联网"
+            return text(R.string.banner_phone_export_requires_network)
         }
         return when (throwable) {
             is SSLException,
             is SocketException,
             is IOException,
-            -> "导出服务暂时不可用"
-            else -> throwable.message ?: "生成二维码失败"
+            -> text(R.string.banner_export_service_unavailable)
+            else -> throwable.message ?: text(R.string.banner_create_qr_failed)
         }
     }
+
+    private fun audioOutputChangedMessage(snapshot: AudioOutputSnapshot): String =
+        when (snapshot.kind) {
+            AudioOutputKind.SPEAKER -> text(R.string.banner_switched_to_watch_speaker)
+            AudioOutputKind.BLUETOOTH -> text(R.string.banner_switched_to_output, snapshot.label)
+            AudioOutputKind.WIRED -> text(R.string.banner_switched_to_output, snapshot.label)
+            AudioOutputKind.REMOTE -> text(R.string.banner_switched_to_output, snapshot.label)
+            AudioOutputKind.OTHER -> text(R.string.banner_output_switched_to, snapshot.label)
+        }
 }

@@ -1,6 +1,7 @@
 package com.sjtech.wearpod.data.repository
 
 import android.content.Context
+import com.sjtech.wearpod.R
 import com.sjtech.wearpod.data.model.AppSnapshot
 import com.sjtech.wearpod.data.model.DownloadSettings
 import com.sjtech.wearpod.data.model.DownloadState
@@ -57,7 +58,7 @@ class WearPodRepository(
     suspend fun createPhoneExportSession(): PhoneExportSession {
         val subscriptions = mutableSnapshot.value.subscriptions
         check(subscriptions.isNotEmpty()) {
-            "当前没有可导出的订阅"
+            appContext.getString(R.string.banner_no_exportable_subscriptions)
         }
         val opmlContent = opmlCodec.buildSubscriptionsExport(subscriptions)
         return importRelayClient.createExportSession(
@@ -142,7 +143,7 @@ class WearPodRepository(
             }
             upsertFeed(subscription.feedUrl, parsedFeed, preferredSubscriptionId = subscriptionId)
         } catch (throwable: Throwable) {
-            markSubscriptionRefreshFailed(subscriptionId, throwable.message ?: "刷新失败")
+            markSubscriptionRefreshFailed(subscriptionId, throwable.message ?: appContext.getString(R.string.refresh_failed))
             throw throwable
         }
     }
@@ -176,6 +177,12 @@ class WearPodRepository(
                     presetMinutes = presetMinutes,
                 ),
             )
+        }
+    }
+
+    suspend fun markAudioOutputSetupCompleted() {
+        mutate { snapshot ->
+            snapshot.copy(hasCompletedAudioOutputSetup = true)
         }
     }
 

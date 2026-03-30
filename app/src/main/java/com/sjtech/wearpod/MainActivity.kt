@@ -3,10 +3,10 @@ package com.sjtech.wearpod
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.KeyEvent
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -14,12 +14,13 @@ import com.sjtech.wearpod.ui.WearPodApp
 import com.sjtech.wearpod.ui.WearPodViewModel
 import com.sjtech.wearpod.ui.theme.WearPodTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val viewModel by viewModels<WearPodViewModel> {
         val container = (application as WearPodApplication).appContainer
         viewModelFactory {
             initializer {
                 WearPodViewModel(
+                    appContext = this@MainActivity.applicationContext,
                     repository = container.repository,
                     playerGateway = container.playerGateway,
                     audioOutputController = container.audioOutputController,
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
         viewModel.syncVolume()
         viewModel.syncAudioOutput()
         viewModel.syncNetworkStatus()
+        viewModel.syncLanguagePreference()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
