@@ -9,6 +9,8 @@ const publicBaseUrl = (process.env.PUBLIC_BASE_URL || `http://localhost:${port}`
 const sessionTtlMs = 10 * 60 * 1000;
 const sessions = new Map();
 const shortCodeIndex = new Map();
+const exportSessions = new Map();
+const exportShortCodeIndex = new Map();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 1024 * 1024 },
@@ -18,7 +20,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: "",
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (_req, res) => {
@@ -28,11 +30,19 @@ app.get("/", (_req, res) => {
 app.post("/enter-code", (req, res) => {
   const shortCode = String(req.body.shortCode || "").trim().toUpperCase();
   const sessionId = shortCodeIndex.get(shortCode);
+  if (sessionId) {
+    res.redirect(`/session/${sessionId}`);
+    return;
+  }
+  const exportSessionId = exportShortCodeIndex.get(shortCode);
+  if (exportSessionId) {
+    res.redirect(`/export/${exportSessionId}`);
+    return;
+  }
   if (!sessionId) {
     res.status(404).type("html").send(renderMessagePage("短码不存在", "请重新扫描手表上的二维码。"));
     return;
   }
-  res.redirect(`/session/${sessionId}`);
 });
 
 app.get("/session/:sessionId", (req, res) => {
@@ -53,6 +63,20 @@ app.post("/api/sessions", (_req, res) => {
   res.json(watchSessionPayload(session));
 });
 
+app.post("/api/export-sessions", (req, res) => {
+  const opmlContent = String(req.body.opmlContent || "").trim();
+  const outlineCount = Number(req.body.outlineCount || 0);
+  if (!opmlContent) {
+    res.status(400).json({ message: "opml_required" });
+    return;
+  }
+  const session = createExportSession({
+    opmlContent,
+    outlineCount: Number.isFinite(outlineCount) ? Math.max(0, outlineCount) : 0,
+  });
+  res.json(exportSessionPayload(session));
+});
+
 app.get("/api/sessions/:sessionId", (req, res) => {
   const session = getSession(req.params.sessionId);
   if (!session) {
@@ -61,6 +85,37 @@ app.get("/api/sessions/:sessionId", (req, res) => {
   }
   expireIfNeeded(session);
   res.json(watchSessionPayload(session));
+});
+
+app.get("/export/:sessionId", (req, res) => {
+  const session = getExportSession(req.params.sessionId);
+  if (!session) {
+    res.status(404).type("html").send(renderMessagePage("导出会话不存在", "请在手表上重新生成导出二维码。"));
+    return;
+  }
+  if (expireIfNeeded(session)) {
+    res.status(410).type("html").send(renderMessagePage("二维码已过期", "请在手表上重新生成导出二维码。"));
+    return;
+  }
+  res.type("html").send(renderExportSessionPage(session));
+});
+
+app.get("/api/export-sessions/:sessionId/download", (req, res) => {
+  const session = getExportSession(req.params.sessionId);
+  if (!session) {
+    res.status(404).type("html").send(renderMessagePage("导出会话不存在", "请在手表上重新生成导出二维码。"));
+    return;
+  }
+  if (expireIfNeeded(session)) {
+    res.status(410).type("html").send(renderMessagePage("二维码已过期", "请在手表上重新生成导出二维码。"));
+    return;
+  }
+  session.downloadCount += 1;
+  res
+    .status(200)
+    .type("application/xml; charset=utf-8")
+    .setHeader("Content-Disposition", `attachment; filename="wearpod-subscriptions.opml"`)
+    .send(session.opmlContent);
 });
 
 app.post("/api/sessions/:sessionId/import", upload.single("opml"), async (req, res) => {
@@ -128,8 +183,30 @@ function createSession() {
   return session;
 }
 
+function createExportSession({ opmlContent, outlineCount }) {
+  const sessionId = crypto.randomBytes(12).toString("hex");
+  const shortCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const session = {
+    sessionId,
+    shortCode,
+    status: "READY",
+    createdAtEpochMillis: Date.now(),
+    expiresAtEpochMillis: Date.now() + sessionTtlMs,
+    outlineCount,
+    downloadCount: 0,
+    opmlContent,
+  };
+  exportSessions.set(sessionId, session);
+  exportShortCodeIndex.set(shortCode, sessionId);
+  return session;
+}
+
 function getSession(sessionId) {
   return sessions.get(sessionId);
+}
+
+function getExportSession(sessionId) {
+  return exportSessions.get(sessionId);
 }
 
 function expireIfNeeded(session) {
@@ -140,7 +217,12 @@ function expireIfNeeded(session) {
     return false;
   }
   session.status = "EXPIRED";
-  session.feedUrls = [];
+  if ("feedUrls" in session) {
+    session.feedUrls = [];
+  }
+  if ("opmlContent" in session) {
+    session.opmlContent = "";
+  }
   return true;
 }
 
@@ -154,6 +236,16 @@ function watchSessionPayload(session) {
     feedUrls: session.status === "SUBMITTED" ? session.feedUrls : [],
     invalidCount: session.status === "SUBMITTED" ? session.invalidCount : 0,
     duplicateCountWithinPayload: session.status === "SUBMITTED" ? session.duplicateCountWithinPayload : 0,
+  };
+}
+
+function exportSessionPayload(session) {
+  return {
+    sessionId: session.sessionId,
+    shortCode: session.shortCode,
+    mobileUrl: `${publicBaseUrl}/export/${session.sessionId}`,
+    expiresAtEpochMillis: session.expiresAtEpochMillis,
+    outlineCount: session.outlineCount,
   };
 }
 
@@ -388,6 +480,56 @@ function renderSessionPage(session) {
 </html>`;
 }
 
+function renderExportSessionPage(session) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WearPod 导出订阅</title>
+  <style>${baseStyles()}</style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card card-hero">
+      <div class="eyebrow">WearPod</div>
+      <div class="hero-topline">
+        <h1>导出订阅备份</h1>
+        <div class="badge">短码 ${session.shortCode}</div>
+      </div>
+      <p class="lede">你现在可以把手表里的订阅导出成一个 OPML 文件，保存到手机或分享到其他播客应用。</p>
+      <div class="session-strip">
+        <div>
+          <div class="strip-label">订阅数量</div>
+          <div class="strip-value">${session.outlineCount} 个</div>
+        </div>
+        <div>
+          <div class="strip-label">文件类型</div>
+          <div class="strip-value">OPML</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card card-form">
+      <div class="stack">
+        <div class="input-card">
+          <div class="input-card-head">
+            <div class="input-card-icon">OPML</div>
+            <div>
+              <strong>下载订阅备份</strong>
+              <p>文件会直接保存到手机浏览器的下载目录。</p>
+            </div>
+          </div>
+          <a class="button-link" href="/api/export-sessions/${session.sessionId}/download">下载 OPML</a>
+        </div>
+        <p class="footnote">如果想迁移到其他客户端，通常直接导入这个 OPML 文件即可。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
 function renderMessagePage(title, message) {
   return `<!doctype html>
 <html lang="zh-CN">
@@ -514,7 +656,8 @@ function baseStyles() {
       outline: none;
       border-color: rgba(255, 123, 91, 0.5);
     }
-    button {
+    button,
+    .button-link {
       border: 0;
       border-radius: 999px;
       padding: 16px 18px;
@@ -525,8 +668,14 @@ function baseStyles() {
       cursor: pointer;
       box-shadow: 0 14px 28px rgba(255,123,91,0.28);
       transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+      text-decoration: none;
+      text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
-    button:hover {
+    button:hover,
+    .button-link:hover {
       transform: translateY(-1px);
       box-shadow: 0 18px 34px rgba(255,123,91,0.32);
     }

@@ -70,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -237,6 +238,7 @@ private fun RootScreenContent(
             snapshot = snapshot,
             onBack = null,
             onOpenImport = viewModel::openImport,
+            onOpenPhoneExport = viewModel::openPhoneExport,
             onOpenSubscription = viewModel::openSubscription,
             onRefresh = viewModel::refreshAll,
             onRetrySubscription = viewModel::retrySubscriptionRefresh,
@@ -293,6 +295,12 @@ private fun ScreenContent(
             state = viewModel.phoneImportState,
             onRetry = viewModel::retryPhoneImportSession,
             onConfirmImport = viewModel::confirmPhoneImport,
+            onOpenSubscriptions = viewModel::openSubscriptionsRoot,
+        )
+
+        WearPodScreen.PhoneExport -> PhoneExportScreen(
+            state = viewModel.phoneExportState,
+            onRetry = viewModel::retryPhoneExportSession,
             onOpenSubscriptions = viewModel::openSubscriptionsRoot,
         )
 
@@ -382,6 +390,7 @@ private fun screenKey(screen: WearPodScreen): String = when (screen) {
     WearPodScreen.Subscriptions -> "subscriptions"
     WearPodScreen.Import -> "import"
     WearPodScreen.PhoneImport -> "phone-import"
+    WearPodScreen.PhoneExport -> "phone-export"
     WearPodScreen.Downloads -> "downloads"
     WearPodScreen.DownloadSettings -> "download-settings"
     is WearPodScreen.PodcastDetail -> "podcast-${screen.subscriptionId}"
@@ -500,23 +509,28 @@ private fun HomeScreen(
         }
 
         item {
-            HomePlaybackCard(
-                title = cardTitle,
-                subtitle = cardSubtitle,
-                artworkUrl = cardArtworkUrl,
-                isPlaying = player.hasMedia && player.isPlaying,
-                audioOutput = if (player.hasMedia) audioOutput else null,
-                onPlayClick = when {
-                    player.hasMedia -> onTogglePlayback
-                    continueEpisode != null -> onContinue
-                    else -> onOpenImport
-                },
-                onClick = when {
-                    player.hasMedia -> onOpenPlayer
-                    continueEpisode != null -> onContinue
-                    else -> onOpenImport
-                },
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                HomePlaybackCard(
+                    title = cardTitle,
+                    subtitle = cardSubtitle,
+                    artworkUrl = cardArtworkUrl,
+                    isPlaying = player.hasMedia && player.isPlaying,
+                    audioOutput = if (player.hasMedia) audioOutput else null,
+                    onPlayClick = when {
+                        player.hasMedia -> onTogglePlayback
+                        continueEpisode != null -> onContinue
+                        else -> onOpenImport
+                    },
+                    onClick = when {
+                        player.hasMedia -> onOpenPlayer
+                        continueEpisode != null -> onContinue
+                        else -> onOpenImport
+                    },
+                )
+            }
         }
 
         item {
@@ -572,131 +586,83 @@ private fun HomePlaybackCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(88.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF1D1821),
-                        Color(0xFF131019),
-                    ),
-                ),
+            .shadow(
+                elevation = 2.dp,
+                shape = RoundedCornerShape(26.dp),
+                ambientColor = Color(0x22000000),
+                spotColor = Color(0x22000000),
             )
-            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(26.dp))
+            .background(Color(0x0BFFFFFF))
+            .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(26.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (artworkUrl != null) {
-                AsyncImage(
-                    model = artworkUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.72f),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xF10B080F),
-                                Color(0xD20B080F),
-                                Color(0x9A0B080F),
-                                Color(0xD90B080F),
-                            ),
-                            start = androidx.compose.ui.geometry.Offset.Zero,
-                            end = androidx.compose.ui.geometry.Offset(900f, 0f),
-                        ),
-                    ),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0x33FF7B5B),
-                                Color.Transparent,
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(90f, 70f),
-                            radius = 180f,
-                        ),
-                    ),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x08FFFFFF),
-                                Color.Transparent,
-                                Color(0x880B080F),
-                            ),
-                        ),
-                    ),
-            )
-            if (audioOutput != null) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 4.dp, bottom = 2.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0x22FFFFFF))
-                        .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Icon(
-                        imageVector = when (audioOutput.kind) {
-                            AudioOutputKind.SPEAKER -> Icons.Rounded.VolumeUp
-                            else -> Icons.Rounded.Headset
-                        },
-                        contentDescription = null,
-                        tint = WearPodTextPrimary.copy(alpha = 0.8f),
-                        modifier = Modifier.size(8.dp),
-                    )
-                    Text(
-                        text = compactAudioOutputLabel(audioOutput),
-                        color = WearPodTextPrimary.copy(alpha = 0.8f),
-                        fontSize = 6.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
             Row(
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(46.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(Color(0xFFFFAA93), WearPodPrimary),
-                            ),
-                        )
+                        .background(Color(0x14FFFFFF))
+                        .border(1.dp, Color(0x24FFFFFF), CircleShape)
                         .clickable(onClick = onPlayClick),
                     contentAlignment = Alignment.Center,
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape),
+                    ) {
+                        if (artworkUrl != null) {
+                            AsyncImage(
+                                model = artworkUrl,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(Color(0xFFFFAA93), WearPodPrimary),
+                                        ),
+                                    ),
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color(0x380B080F)),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0x14FFFFFF),
+                                            Color.Transparent,
+                                            Color(0x4A0B080F),
+                                        ),
+                                    ),
+                                ),
+                        )
+                    }
                     Icon(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = null,
-                        tint = WearPodBackground,
-                        modifier = Modifier.size(24.dp),
+                        tint = WearPodTextPrimary,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Center,
@@ -717,12 +683,42 @@ private fun HomePlaybackCard(
                     Text(
                         text = subtitle,
                         color = WearPodTextMuted,
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(end = if (audioOutput != null) 52.dp else 0.dp),
+                            .padding(end = if (audioOutput != null) 44.dp else 0.dp),
+                    )
+                }
+            }
+            if (audioOutput != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 2.dp, bottom = 2.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x18FFFFFF))
+                        .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 4.dp, vertical = 1.5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Icon(
+                        imageVector = when (audioOutput.kind) {
+                            AudioOutputKind.SPEAKER -> Icons.Rounded.VolumeUp
+                            else -> Icons.Rounded.Headset
+                        },
+                        contentDescription = null,
+                        tint = WearPodTextPrimary.copy(alpha = 0.8f),
+                        modifier = Modifier.size(7.dp),
+                    )
+                    Text(
+                        text = compactAudioOutputLabel(audioOutput),
+                        color = WearPodTextPrimary.copy(alpha = 0.8f),
+                        fontSize = 6.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -735,6 +731,7 @@ private fun SubscriptionsScreen(
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     onBack: (() -> Unit)?,
     onOpenImport: () -> Unit,
+    onOpenPhoneExport: () -> Unit,
     onOpenSubscription: (String) -> Unit,
     onRefresh: () -> Unit,
     onRetrySubscription: (String) -> Unit,
@@ -811,6 +808,30 @@ private fun SubscriptionsScreen(
                     )
                 },
                 onClick = onOpenImport,
+            )
+        }
+
+        item {
+            WatchChip(
+                title = "手机导出",
+                subtitle = "扫码下载 OPML",
+                leading = {
+                    Icon(
+                        Icons.Rounded.CloudDownload,
+                        contentDescription = null,
+                        tint = WearPodTextPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                trailing = {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = WearPodTextMuted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                onClick = onOpenPhoneExport,
             )
         }
 
@@ -1370,6 +1391,186 @@ private fun PhoneImportScreen(
 }
 
 @Composable
+private fun PhoneExportScreen(
+    state: PhoneExportUiState,
+    onRetry: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
+) {
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(state.stage, state.expiresAtEpochMillis) {
+        while (state.stage == PhoneExportStage.READY && state.expiresAtEpochMillis != null) {
+            nowMillis = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+
+    val secondsRemaining = remember(state.expiresAtEpochMillis, nowMillis) {
+        state.expiresAtEpochMillis
+            ?.minus(nowMillis)
+            ?.div(1_000L)
+            ?.coerceAtLeast(0L)
+            ?.toInt()
+    }
+    val isExpired = state.stage == PhoneExportStage.READY &&
+        state.expiresAtEpochMillis?.let { it <= nowMillis } == true
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                WatchTimeHeader(color = WearPodTextMuted)
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "手机导出",
+                subtitle = when {
+                    state.stage == PhoneExportStage.CREATING -> "正在生成二维码"
+                    isExpired -> "二维码已过期"
+                    state.stage == PhoneExportStage.READY -> "用手机扫码下载 OPML"
+                    state.stage == PhoneExportStage.ERROR -> "生成二维码失败"
+                    else -> "导出订阅备份"
+                },
+            )
+        }
+
+        when {
+            state.stage == PhoneExportStage.CREATING -> item {
+                DarkCard {
+                    Text(
+                        "正在准备导出会话...",
+                        color = WearPodTextPrimary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            state.stage == PhoneExportStage.READY && !isExpired -> {
+                item {
+                    DarkCard {
+                        if (!state.mobileUrl.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                QrCodeMatrix(
+                                    data = state.mobileUrl,
+                                    modifier = Modifier.size(132.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        Text(
+                            "手机扫码后直接下载 OPML",
+                            color = WearPodTextPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            WatchMetricPill(
+                                label = "订阅",
+                                value = state.outlineCount.toString(),
+                                modifier = Modifier.weight(1f),
+                            )
+                            WatchCompactChip(
+                                text = "短码 ${state.shortCode ?: "--"}",
+                                highlighted = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (secondsRemaining != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "剩余 ${secondsRemaining}s",
+                                color = WearPodTextMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Text(
+                        "OPML 会保存在手机，不会留在手表里。",
+                        color = WearPodTextMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                item {
+                    PillButton(
+                        text = "返回订阅",
+                        background = WearPodSurfaceSoft,
+                        foreground = WearPodTextPrimary,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onOpenSubscriptions,
+                    )
+                }
+            }
+
+            state.stage == PhoneExportStage.ERROR || isExpired -> {
+                item {
+                    DarkCard {
+                        Text(
+                            state.error ?: "二维码已过期，请重新生成。",
+                            color = WearPodTextPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PillButton(
+                            text = "重新生成二维码",
+                            background = WearPodSurfaceSoft,
+                            foreground = WearPodTextPrimary,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = onRetry,
+                        )
+                    }
+                }
+
+                item {
+                    PillButton(
+                        text = "返回订阅",
+                        background = WearPodPrimary,
+                        foreground = WearPodBackground,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onOpenSubscriptions,
+                    )
+                }
+            }
+
+            else -> item {
+                Text(
+                    "准备导出订阅备份",
+                    color = WearPodTextMuted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PodcastDetailScreen(
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     subscription: Subscription,
@@ -1570,7 +1771,7 @@ private fun PodcastDetailScreen(
                         onClick = { onEpisodeFilterChange(EpisodeFilter.UNPLAYED) },
                     )
                     WatchCompactChip(
-                        text = "已下载",
+                        text = "已下",
                         modifier = Modifier.weight(1f),
                         textSize = 10.sp,
                         highlighted = episodeFilter == EpisodeFilter.DOWNLOADED,
@@ -2083,7 +2284,7 @@ private fun PlayerScreen(
         }
         Box(
             modifier = Modifier
-                .size(64.dp)
+                .size(50.dp)
                 .align(Alignment.Center)
                 .graphicsLayer {
                     alpha = centerButtonAlpha
@@ -2101,13 +2302,9 @@ private fun PlayerScreen(
             )
             Box(
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(Color(0xFFFF9B84), WearPodPrimary),
-                        ),
-                    )
+                    .background(Color(0x8A15111A))
                     .then(
                         if (hideCenterPlayback) {
                             Modifier
@@ -2120,7 +2317,7 @@ private fun PlayerScreen(
                 Icon(
                     imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = null,
-                    tint = WearPodBackground,
+                    tint = WearPodTextPrimary,
                     modifier = Modifier.size(21.dp),
                 )
             }

@@ -32,6 +32,7 @@ It does not depend on a phone companion app. The current goal is simple: import 
 
 - Import public podcast RSS feeds directly on the watch
 - Start a phone-assisted QR import session for RSS or OPML input on mobile
+- Start a phone-assisted QR export session and download an OPML backup on mobile
 - Manage subscriptions without a phone companion app
 - Favorite subscriptions and surface them on the home screen
 - Browse episode lists with filters for `All`, `Unplayed`, and `Downloaded`
@@ -69,7 +70,6 @@ Out of scope for this iteration:
 - cloud accounts
 - podcast discovery backend
 - private or paid feed authentication
-- OPML export
 
 ## App flow
 
@@ -231,7 +231,6 @@ Background refresh only runs when:
 
 - Public RSS feeds only
 - No authentication for private or paid feeds
-- No OPML export yet
 - QR import currently depends on a separately running relay service
 - No cloud sync across watch / phone / web
 - Storage is now split across Room and DataStore, but schema migration coverage is still minimal beyond the initial legacy JSON import

@@ -7,6 +7,14 @@ data class PhoneImportSession(
     val expiresAtEpochMillis: Long,
 )
 
+data class PhoneExportSession(
+    val sessionId: String,
+    val shortCode: String,
+    val mobileUrl: String,
+    val expiresAtEpochMillis: Long,
+    val outlineCount: Int,
+)
+
 enum class PhoneImportSessionStatus {
     PENDING,
     SUBMITTED,

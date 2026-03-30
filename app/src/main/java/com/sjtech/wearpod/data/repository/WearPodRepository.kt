@@ -6,6 +6,7 @@ import com.sjtech.wearpod.data.model.DownloadSettings
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.ImportSuggestion
+import com.sjtech.wearpod.data.model.PhoneExportSession
 import com.sjtech.wearpod.data.model.PhoneImportPreview
 import com.sjtech.wearpod.data.model.PhoneImportResult
 import com.sjtech.wearpod.data.model.PhoneImportSession
@@ -14,6 +15,7 @@ import com.sjtech.wearpod.data.model.PlaybackMemory
 import com.sjtech.wearpod.data.model.SleepTimer
 import com.sjtech.wearpod.data.model.Subscription
 import com.sjtech.wearpod.data.importing.ImportRelayClient
+import com.sjtech.wearpod.data.opml.OpmlCodec
 import com.sjtech.wearpod.data.rss.FeedNetworkClient
 import com.sjtech.wearpod.data.rss.ParsedFeed
 import com.sjtech.wearpod.data.rss.ParsedEpisode
@@ -36,6 +38,7 @@ class WearPodRepository(
     private val networkClient: FeedNetworkClient,
     private val importRelayClient: ImportRelayClient,
 ) {
+    private val opmlCodec = OpmlCodec()
     private val mutex = Mutex()
     private val mutableSnapshot = MutableStateFlow(store.read())
 
@@ -57,6 +60,18 @@ class WearPodRepository(
     fun isPhoneImportAvailable(): Boolean = importRelayClient.isConfigured()
 
     suspend fun createPhoneImportSession(): PhoneImportSession = importRelayClient.createSession()
+
+    suspend fun createPhoneExportSession(): PhoneExportSession {
+        val subscriptions = mutableSnapshot.value.subscriptions
+        check(subscriptions.isNotEmpty()) {
+            "当前没有可导出的订阅"
+        }
+        val opmlContent = opmlCodec.buildSubscriptionsExport(subscriptions)
+        return importRelayClient.createExportSession(
+            opmlContent = opmlContent,
+            outlineCount = subscriptions.size,
+        )
+    }
 
     suspend fun fetchPhoneImportSession(sessionId: String): PhoneImportSessionSnapshot =
         importRelayClient.fetchSession(sessionId)

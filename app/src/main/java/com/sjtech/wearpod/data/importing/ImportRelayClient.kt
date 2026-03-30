@@ -1,6 +1,7 @@
 package com.sjtech.wearpod.data.importing
 
 import com.sjtech.wearpod.data.model.PhoneImportSession
+import com.sjtech.wearpod.data.model.PhoneExportSession
 import com.sjtech.wearpod.data.model.PhoneImportSessionSnapshot
 import com.sjtech.wearpod.data.model.PhoneImportSessionStatus
 import java.io.BufferedReader
@@ -8,6 +9,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -32,6 +34,33 @@ class ImportRelayClient(
                 shortCode = payload.getString("shortCode"),
                 mobileUrl = canonicalMobileUrl(payload.getString("mobileUrl")),
                 expiresAtEpochMillis = payload.getLong("expiresAtEpochMillis"),
+            )
+        }
+    }
+
+    suspend fun createExportSession(
+        opmlContent: String,
+        outlineCount: Int,
+    ): PhoneExportSession = withContext(Dispatchers.IO) {
+        ensureConfigured()
+        requestWithFallback { requestBaseUrl ->
+            val payload = JSONObject()
+                .put("opmlContent", opmlContent)
+                .put("outlineCount", outlineCount)
+            val connection = openConnection(requestBaseUrl, "/api/export-sessions", method = "POST").apply {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            }
+            connection.outputStream.use { stream ->
+                stream.write(payload.toString().toByteArray(StandardCharsets.UTF_8))
+            }
+            val response = connection.readJsonObject()
+            PhoneExportSession(
+                sessionId = response.getString("sessionId"),
+                shortCode = response.getString("shortCode"),
+                mobileUrl = canonicalMobileUrl(response.getString("mobileUrl")),
+                expiresAtEpochMillis = response.getLong("expiresAtEpochMillis"),
+                outlineCount = response.optInt("outlineCount", outlineCount),
             )
         }
     }

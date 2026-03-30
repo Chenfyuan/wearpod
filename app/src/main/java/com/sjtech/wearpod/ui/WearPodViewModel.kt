@@ -28,6 +28,7 @@ sealed interface WearPodScreen {
     data object Subscriptions : WearPodScreen
     data object Import : WearPodScreen
     data object PhoneImport : WearPodScreen
+    data object PhoneExport : WearPodScreen
     data object Downloads : WearPodScreen
     data object DownloadSettings : WearPodScreen
     data class PodcastDetail(val subscriptionId: String) : WearPodScreen
@@ -64,6 +65,23 @@ data class PhoneImportUiState(
     val error: String? = null,
 )
 
+enum class PhoneExportStage {
+    IDLE,
+    CREATING,
+    READY,
+    ERROR,
+}
+
+data class PhoneExportUiState(
+    val stage: PhoneExportStage = PhoneExportStage.IDLE,
+    val sessionId: String? = null,
+    val shortCode: String? = null,
+    val mobileUrl: String? = null,
+    val expiresAtEpochMillis: Long? = null,
+    val outlineCount: Int = 0,
+    val error: String? = null,
+)
+
 class WearPodViewModel(
     val repository: WearPodRepository,
     val playerGateway: PlayerGateway,
@@ -75,6 +93,7 @@ class WearPodViewModel(
     private val history = ArrayDeque<WearPodScreen>()
     private var phoneImportCreateJob: Job? = null
     private var phoneImportPollJob: Job? = null
+    private var phoneExportCreateJob: Job? = null
 
     var currentScreen by mutableStateOf<WearPodScreen>(WearPodScreen.Home)
         private set
@@ -99,6 +118,8 @@ class WearPodViewModel(
         private set
     var phoneImportState by mutableStateOf(PhoneImportUiState())
         private set
+    var phoneExportState by mutableStateOf(PhoneExportUiState())
+        private set
 
     val snapshot = repository.snapshot
     val playerState = playerGateway.playerState
@@ -108,9 +129,7 @@ class WearPodViewModel(
     val suggestions: List<ImportSuggestion> = repository.importSuggestions
 
     fun openRoot(screen: WearPodScreen) {
-        if (currentScreen == WearPodScreen.PhoneImport) {
-            clearPhoneImportState()
-        }
+        clearPhoneBridgeStateForNavigation()
         history.clear()
         currentScreen = screen
         syncBackState()
@@ -145,27 +164,38 @@ class WearPodViewModel(
         createPhoneImportSession()
     }
 
-    fun push(screen: WearPodScreen) {
-        if (screen != WearPodScreen.PhoneImport) {
-            clearPhoneImportIfNeeded()
+    fun openPhoneExport() {
+        if (!repository.isPhoneImportAvailable()) {
+            showBanner("手机导出服务未配置")
+            return
         }
+        if (snapshot.value.subscriptions.isEmpty()) {
+            showBanner("当前没有可导出的订阅")
+            return
+        }
+        if (!isOnline.value) {
+            showBanner("当前无网络，手机导出需要联网")
+            return
+        }
+        push(WearPodScreen.PhoneExport)
+        createPhoneExportSession()
+    }
+
+    fun push(screen: WearPodScreen) {
+        clearPhoneBridgeStateIfLeaving(screen)
         history.addLast(currentScreen)
         currentScreen = screen
         syncBackState()
     }
 
     fun replaceCurrent(screen: WearPodScreen) {
-        if (currentScreen == WearPodScreen.PhoneImport && screen != WearPodScreen.PhoneImport) {
-            clearPhoneImportState()
-        }
+        clearPhoneBridgeStateIfLeaving(screen)
         currentScreen = screen
         syncBackState()
     }
 
     fun back() {
-        if (currentScreen == WearPodScreen.PhoneImport) {
-            clearPhoneImportState()
-        }
+        clearPhoneBridgeStateForNavigation()
         if (history.isNotEmpty()) {
             currentScreen = history.removeLast()
         } else {
@@ -218,6 +248,10 @@ class WearPodViewModel(
 
     fun retryPhoneImportSession() {
         createPhoneImportSession()
+    }
+
+    fun retryPhoneExportSession() {
+        createPhoneExportSession()
     }
 
     fun confirmPhoneImport() {
@@ -652,6 +686,33 @@ class WearPodViewModel(
         }
     }
 
+    private fun createPhoneExportSession() {
+        phoneExportCreateJob?.cancel()
+        phoneExportState = PhoneExportUiState(stage = PhoneExportStage.CREATING)
+        phoneExportCreateJob = viewModelScope.launch {
+            runCatching { repository.createPhoneExportSession() }
+                .onSuccess { session ->
+                    if (currentScreen != WearPodScreen.PhoneExport) {
+                        return@onSuccess
+                    }
+                    phoneExportState = PhoneExportUiState(
+                        stage = PhoneExportStage.READY,
+                        sessionId = session.sessionId,
+                        shortCode = session.shortCode,
+                        mobileUrl = session.mobileUrl,
+                        expiresAtEpochMillis = session.expiresAtEpochMillis,
+                        outlineCount = session.outlineCount,
+                    )
+                }
+                .onFailure { throwable ->
+                    phoneExportState = PhoneExportUiState(
+                        stage = PhoneExportStage.ERROR,
+                        error = friendlyExportErrorMessage(throwable),
+                    )
+                }
+        }
+    }
+
     private fun startPhoneImportPolling(sessionId: String) {
         phoneImportPollJob?.cancel()
         phoneImportPollJob = viewModelScope.launch {
@@ -721,9 +782,21 @@ class WearPodViewModel(
         canGoBack = history.isNotEmpty()
     }
 
-    private fun clearPhoneImportIfNeeded() {
+    private fun clearPhoneBridgeStateIfLeaving(nextScreen: WearPodScreen) {
+        if (currentScreen == WearPodScreen.PhoneImport && nextScreen != WearPodScreen.PhoneImport) {
+            clearPhoneImportState()
+        }
+        if (currentScreen == WearPodScreen.PhoneExport && nextScreen != WearPodScreen.PhoneExport) {
+            clearPhoneExportState()
+        }
+    }
+
+    private fun clearPhoneBridgeStateForNavigation() {
         if (currentScreen == WearPodScreen.PhoneImport) {
             clearPhoneImportState()
+        }
+        if (currentScreen == WearPodScreen.PhoneExport) {
+            clearPhoneExportState()
         }
     }
 
@@ -733,6 +806,12 @@ class WearPodViewModel(
         phoneImportPollJob?.cancel()
         phoneImportPollJob = null
         phoneImportState = PhoneImportUiState()
+    }
+
+    private fun clearPhoneExportState() {
+        phoneExportCreateJob?.cancel()
+        phoneExportCreateJob = null
+        phoneExportState = PhoneExportUiState()
     }
 
     private suspend fun enqueueAutoDownloads(subscriptionId: String) {
@@ -777,6 +856,19 @@ class WearPodViewModel(
                 }
 
             else -> throwable.message ?: if (creating) "创建二维码失败" else "获取导入状态失败"
+        }
+    }
+
+    private fun friendlyExportErrorMessage(throwable: Throwable): String {
+        if (!isOnline.value) {
+            return "当前无网络，手机导出需要联网"
+        }
+        return when (throwable) {
+            is SSLException,
+            is SocketException,
+            is IOException,
+            -> "导出服务暂时不可用"
+            else -> throwable.message ?: "生成二维码失败"
         }
     }
 }
