@@ -17,6 +17,7 @@ Environment variables:
   CONTAINER_NAME   Docker container name. Default: wearpod-relay
   PORT             Relay container port. Default: 8787
   HOST_BIND        Host bind address. Default: 127.0.0.1
+  FALLBACK_PORT    Optional public fallback port mapped to the relay port. Default: 8080
   PUBLIC_BASE_URL  Public relay base URL. Default: https://wearpod.linsblog.cn
 
 Examples:
@@ -37,6 +38,7 @@ IMAGE_NAME="${IMAGE_NAME:-wearpod-relay:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-wearpod-relay}"
 PORT="${PORT:-8787}"
 HOST_BIND="${HOST_BIND:-127.0.0.1}"
+FALLBACK_PORT="${FALLBACK_PORT:-8080}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://wearpod.linsblog.cn}"
 
 resolve_ref() {
@@ -112,6 +114,7 @@ docker run -d \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
   -p "${HOST_BIND}:${PORT}:${PORT}" \
+  -p "${FALLBACK_PORT}:${PORT}" \
   -v "${ASSET_DIR}:/docs/assets:ro" \
   -e "PORT=${PORT}" \
   -e "PUBLIC_BASE_URL=${PUBLIC_BASE_URL}" \
@@ -136,3 +139,4 @@ echo "requested ref: ${REQUESTED_REF}"
 echo "resolved ref: ${RESOLVED_REF}"
 echo "public base: ${PUBLIC_BASE_URL}"
 echo "asset dir: ${ASSET_DIR}"
+echo "fallback port: ${FALLBACK_PORT}"
