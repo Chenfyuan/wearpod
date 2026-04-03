@@ -91,7 +91,7 @@ fetch_file "relay/package.json" "${APP_DIR}/package.json"
 fetch_file "relay/package-lock.json" "${APP_DIR}/package-lock.json"
 fetch_file "relay/server.mjs" "${APP_DIR}/server.mjs"
 
-assets=(
+shared_assets=(
   "wearpod-cover.svg"
   "wearpod-detail.png"
   "wearpod-downloads.png"
@@ -101,11 +101,20 @@ assets=(
   "wearpod-subscriptions.png"
 )
 
-for asset in "${assets[@]}"; do
+localized_assets=(
+  "wearpod-detail.png"
+  "wearpod-downloads.png"
+  "wearpod-home.png"
+  "wearpod-player.png"
+  "wearpod-queue.png"
+  "wearpod-subscriptions.png"
+)
+
+for asset in "${shared_assets[@]}"; do
   fetch_file "docs/assets/${asset}" "${ASSET_DIR}/${asset}"
 done
 
-for asset in "${assets[@]}"; do
+for asset in "${localized_assets[@]}"; do
   fetch_file "docs/assets/en/${asset}" "${ASSET_EN_DIR}/${asset}"
 done
 
