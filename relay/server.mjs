@@ -25,7 +25,10 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: "",
 });
 const defaultLocale = "en";
-const companyName = "广州舜健科技有限公司";
+const companyNames = {
+  "zh-CN": "广州舜健科技有限公司",
+  en: "SJTECG",
+};
 const contactEmail = "chenfyuanl@gmail.com";
 const privacyEffectiveDate = "2026-03-30";
 const messages = {
@@ -576,6 +579,10 @@ function t(locale, key, vars = {}) {
   return template.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
 }
 
+function localizedCompanyName(locale) {
+  return companyNames[locale] || companyNames[defaultLocale];
+}
+
 function localizedPath(pathname, localeInfo, hash = "") {
   const query = localeInfo.explicit ? `?lang=${encodeURIComponent(localeInfo.locale)}` : "";
   return `${pathname}${query}${hash}`;
@@ -662,6 +669,7 @@ function collectOutlineUrls(node) {
 
 function renderLandingPage(localeInfo) {
   const locale = localeInfo.locale;
+  const companyName = localizedCompanyName(locale);
   return `<!doctype html>
 <html lang="${locale}">
 <head>
@@ -873,6 +881,7 @@ function renderShortCodeForm(localeInfo, type) {
 
 function renderPrivacyPage(localeInfo) {
   const locale = localeInfo.locale;
+  const companyName = localizedCompanyName(locale);
   return `<!doctype html>
 <html lang="${locale}">
 <head>
