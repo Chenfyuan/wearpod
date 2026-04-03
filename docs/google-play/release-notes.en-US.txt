@@ -1,0 +1,8 @@
+WearPod 0.1.0 brings the first complete public Wear OS experience:
+
+- Standalone podcast playback on the watch
+- Phone-assisted subscription import
+- Phone-assisted OPML export
+- Offline downloads and queue management
+- Playback controls tuned for round watches
+- English and Simplified Chinese support
