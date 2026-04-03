@@ -34,6 +34,7 @@ REPO_NAME="${REPO_NAME:-wearpod}"
 REQUESTED_REF="${1:-${REPO_REF:-latest}}"
 APP_DIR="${APP_DIR:-/opt/wearpod-relay/app}"
 ASSET_DIR="${ASSET_DIR:-/opt/wearpod-relay/docs/assets}"
+ASSET_EN_DIR="${ASSET_EN_DIR:-${ASSET_DIR}/en}"
 IMAGE_NAME="${IMAGE_NAME:-wearpod-relay:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-wearpod-relay}"
 PORT="${PORT:-8787}"
@@ -82,7 +83,7 @@ fetch_file() {
   curl -fLSo "${target_path}" "${url1}" || curl -fLSo "${target_path}" "${url2}"
 }
 
-mkdir -p "${APP_DIR}" "${ASSET_DIR}"
+mkdir -p "${APP_DIR}" "${ASSET_DIR}" "${ASSET_EN_DIR}"
 cd "${APP_DIR}"
 
 fetch_file "relay/Dockerfile" "${APP_DIR}/Dockerfile"
@@ -102,6 +103,10 @@ assets=(
 
 for asset in "${assets[@]}"; do
   fetch_file "docs/assets/${asset}" "${ASSET_DIR}/${asset}"
+done
+
+for asset in "${assets[@]}"; do
+  fetch_file "docs/assets/en/${asset}" "${ASSET_EN_DIR}/${asset}"
 done
 
 echo "==> building image ${IMAGE_NAME}"
@@ -139,4 +144,5 @@ echo "requested ref: ${REQUESTED_REF}"
 echo "resolved ref: ${RESOLVED_REF}"
 echo "public base: ${PUBLIC_BASE_URL}"
 echo "asset dir: ${ASSET_DIR}"
+echo "asset en dir: ${ASSET_EN_DIR}"
 echo "fallback port: ${FALLBACK_PORT}"

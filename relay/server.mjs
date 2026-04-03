@@ -27,7 +27,7 @@ const xmlParser = new XMLParser({
 const defaultLocale = "en";
 const companyNames = {
   "zh-CN": "广州舜健科技有限公司",
-  en: "SJTECG",
+  en: "SJTECH",
 };
 const contactEmail = "chenfyuanl@gmail.com";
 const privacyEffectiveDate = "2026-03-30";
@@ -588,6 +588,11 @@ function localizedPath(pathname, localeInfo, hash = "") {
   return `${pathname}${query}${hash}`;
 }
 
+function localizedAssetPath(locale, filename) {
+  const base = locale === "en" ? `${docsAssetBaseUrl}/en` : docsAssetBaseUrl;
+  return `${base}/${filename}`;
+}
+
 function forceLocalePath(pathname, locale, hash = "") {
   return `${pathname}?lang=${encodeURIComponent(locale)}${hash}`;
 }
@@ -712,12 +717,12 @@ function renderLandingPage(localeInfo) {
       <div class="hero-visual">
         <div class="hero-device hero-device-primary">
           <div class="watch-frame watch-frame-large">
-            <img src="${docsAssetBaseUrl}/wearpod-player.png" alt="${t(locale, "preview_player_title")}" loading="lazy" />
+            <img src="${localizedAssetPath(locale, "wearpod-player.png")}" alt="${t(locale, "preview_player_title")}" loading="lazy" />
           </div>
         </div>
         <div class="hero-device hero-device-secondary">
           <div class="watch-frame watch-frame-medium">
-            <img src="${docsAssetBaseUrl}/wearpod-home.png" alt="${t(locale, "preview_home_title")}" loading="lazy" />
+            <img src="${localizedAssetPath(locale, "wearpod-home.png")}" alt="${t(locale, "preview_home_title")}" loading="lazy" />
           </div>
         </div>
       </div>
@@ -735,7 +740,7 @@ function renderLandingPage(localeInfo) {
         <figure class="preview-card">
           <div class="watch-stage">
             <div class="watch-frame watch-frame-card">
-              <img src="${docsAssetBaseUrl}/wearpod-home.png" alt="${t(locale, "preview_home_title")}" loading="lazy" />
+              <img src="${localizedAssetPath(locale, "wearpod-home.png")}" alt="${t(locale, "preview_home_title")}" loading="lazy" />
             </div>
           </div>
           <figcaption>
@@ -746,7 +751,7 @@ function renderLandingPage(localeInfo) {
         <figure class="preview-card">
           <div class="watch-stage">
             <div class="watch-frame watch-frame-card">
-              <img src="${docsAssetBaseUrl}/wearpod-player.png" alt="${t(locale, "preview_player_title")}" loading="lazy" />
+              <img src="${localizedAssetPath(locale, "wearpod-player.png")}" alt="${t(locale, "preview_player_title")}" loading="lazy" />
             </div>
           </div>
           <figcaption>
@@ -757,7 +762,7 @@ function renderLandingPage(localeInfo) {
         <figure class="preview-card">
           <div class="watch-stage">
             <div class="watch-frame watch-frame-card">
-              <img src="${docsAssetBaseUrl}/wearpod-subscriptions.png" alt="${t(locale, "preview_subscriptions_title")}" loading="lazy" />
+              <img src="${localizedAssetPath(locale, "wearpod-subscriptions.png")}" alt="${t(locale, "preview_subscriptions_title")}" loading="lazy" />
             </div>
           </div>
           <figcaption>
