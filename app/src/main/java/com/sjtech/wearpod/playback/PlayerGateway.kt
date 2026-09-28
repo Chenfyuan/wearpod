@@ -55,6 +55,8 @@ class PlayerGateway(
     private val controllerDeferred = CompletableDeferred<MediaController>()
     private val mutablePlayerState = MutableStateFlow(PlayerSnapshot())
     private var lastPersistAt = 0L
+    private var lastPersistedEpisodeId: String? = null
+    private var lastPersistedPositionMs = -1L
     private var sleepTimerJob: Job? = null
 
     val playerState: StateFlow<PlayerSnapshot> = mutablePlayerState.asStateFlow()
@@ -237,10 +239,17 @@ class PlayerGateway(
     private fun persistPlayback(controller: MediaController) {
         val mediaId = controller.currentMediaItem?.mediaId ?: return
         val now = System.currentTimeMillis()
-        if (now - lastPersistAt < 5_000L && controller.isPlaying) return
-        lastPersistAt = now
-        val duration = controller.duration.takeIf { it > 0 } ?: 0L
         val position = controller.currentPosition.coerceAtLeast(0L)
+        if (controller.isPlaying) {
+            if (now - lastPersistAt < 5_000L) return
+        } else if (mediaId == lastPersistedEpisodeId && position == lastPersistedPositionMs) {
+            // Paused and nothing moved since the last save: skip the redundant write.
+            return
+        }
+        lastPersistAt = now
+        lastPersistedEpisodeId = mediaId
+        lastPersistedPositionMs = position
+        val duration = controller.duration.takeIf { it > 0 } ?: 0L
         val isCompleted = duration > 0 && position >= duration - 3_000L
         appScope.launch {
             repository.updatePlayback(
