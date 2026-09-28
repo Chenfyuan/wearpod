@@ -23,10 +23,14 @@ import com.sjtech.wearpod.data.rss.PodcastFeedParser
 import com.sjtech.wearpod.data.store.WearPodStore
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -40,15 +44,44 @@ class WearPodRepository(
 ) {
     private val opmlCodec = OpmlCodec()
     private val mutex = Mutex()
-    private val mutableSnapshot = MutableStateFlow(store.read())
+    private val mutableSnapshot = MutableStateFlow(EMPTY_SNAPSHOT)
+    private val mutableIsLoaded = MutableStateFlow(false)
+    private val loaded = CompletableDeferred<Unit>()
 
     // Last state known to be on disk; writes are diffed against it so a failed write is retried
     // by the next mutation instead of being silently dropped.
-    private var persistedSnapshot = mutableSnapshot.value
+    private var persistedSnapshot = EMPTY_SNAPSHOT
 
+    /** Holds [EMPTY_SNAPSHOT] until the persisted state has been loaded; see [isLoaded]. */
     val snapshot: StateFlow<AppSnapshot> = mutableSnapshot.asStateFlow()
+    val isLoaded: StateFlow<Boolean> = mutableIsLoaded.asStateFlow()
+
+    init {
+        // Load off the main thread so a large library doesn't block Application.onCreate.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                val stored = store.read()
+                mutex.withLock {
+                    persistedSnapshot = stored
+                    mutableSnapshot.value = stored
+                }
+                mutableIsLoaded.value = true
+                loaded.complete(Unit)
+            } catch (throwable: Throwable) {
+                // Fail anyone waiting instead of hanging them, then crash as the old blocking read did.
+                loaded.completeExceptionally(throwable)
+                throw throwable
+            }
+        }
+    }
+
+    /** Suspends until the persisted state is available in [snapshot]. */
+    suspend fun awaitLoaded() {
+        loaded.await()
+    }
 
     suspend fun ensureImportedFeed(rawUrl: String): Subscription? {
+        awaitLoaded()
         val normalizedUrl = normalizeUrl(rawUrl)
         val existing = mutableSnapshot.value.subscriptions.firstOrNull { it.feedUrl == normalizedUrl }
         if (existing != null) return existing
@@ -60,6 +93,7 @@ class WearPodRepository(
     suspend fun createPhoneImportSession(): PhoneImportSession = importRelayClient.createSession()
 
     suspend fun createPhoneExportSession(): PhoneExportSession {
+        awaitLoaded()
         val subscriptions = mutableSnapshot.value.subscriptions
         check(subscriptions.isNotEmpty()) {
             appContext.getString(R.string.banner_no_exportable_subscriptions)
@@ -103,6 +137,7 @@ class WearPodRepository(
     }
 
     suspend fun importFeeds(feedUrls: List<String>): PhoneImportResult {
+        awaitLoaded()
         val importedSubscriptions = mutableListOf<Subscription>()
         val failedUrls = mutableListOf<String>()
         var duplicateCount = 0
@@ -140,6 +175,7 @@ class WearPodRepository(
     }
 
     suspend fun refreshSubscription(subscriptionId: String) {
+        awaitLoaded()
         val subscription = mutableSnapshot.value.subscriptions.firstOrNull { it.id == subscriptionId } ?: return
         try {
             val parsedFeed = withContext(Dispatchers.IO) {
@@ -153,6 +189,7 @@ class WearPodRepository(
     }
 
     suspend fun refreshAllSubscriptions() {
+        awaitLoaded()
         mutableSnapshot.value.subscriptions.forEach { subscription ->
             runCatching { refreshSubscription(subscription.id) }
         }
@@ -267,6 +304,7 @@ class WearPodRepository(
     }
 
     suspend fun resetEpisodeDownload(episodeId: String) {
+        awaitLoaded()
         val episode = mutableSnapshot.value.episodes.firstOrNull { it.id == episodeId } ?: return
         episode.downloadedFilePath?.let { File(it).delete() }
         updateEpisode(episodeId) {
@@ -540,6 +578,7 @@ class WearPodRepository(
     }
 
     private suspend fun mutate(transform: (AppSnapshot) -> AppSnapshot) {
+        awaitLoaded()
         mutex.withLock {
             val updated = transform(mutableSnapshot.value)
             mutableSnapshot.value = updated
@@ -604,3 +643,10 @@ class WearPodRepository(
         )
     }
 }
+
+private val EMPTY_SNAPSHOT = AppSnapshot(
+    subscriptions = emptyList(),
+    episodes = emptyList(),
+    favoriteSubscriptionIds = emptySet(),
+    playbackMemory = PlaybackMemory(),
+)

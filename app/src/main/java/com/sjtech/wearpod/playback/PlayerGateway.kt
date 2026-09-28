@@ -75,12 +75,17 @@ class PlayerGateway(
                     },
                 )
                 controllerDeferred.complete(controller)
-                controller.setPlaybackParameters(PlaybackParameters(repository.snapshot.value.playbackMemory.speed))
                 updatePlayerSnapshot(controller)
             },
             appContext.mainExecutor,
         )
-        restoreSleepTimer()
+        appScope.launch {
+            repository.awaitLoaded()
+            restoreSleepTimer()
+            val controller = controllerDeferred.await()
+            controller.setPlaybackParameters(PlaybackParameters(repository.snapshot.value.playbackMemory.speed))
+            updatePlayerSnapshot(controller)
+        }
         appScope.launch {
             while (isActive) {
                 val controller = controllerDeferred.await()

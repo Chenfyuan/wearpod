@@ -55,6 +55,8 @@ class AppContainer(application: Application) {
 
     init {
         appScope.launch {
+            // Don't sync against the empty placeholder snapshot, which would cancel the refresh job.
+            repository.awaitLoaded()
             repository.snapshot
                 .map { snapshot ->
                     RefreshScheduleConfig(

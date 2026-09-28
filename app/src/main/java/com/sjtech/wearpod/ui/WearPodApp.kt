@@ -135,6 +135,12 @@ private val ROOT_SCREENS = listOf(
 @OptIn(ExperimentalWearFoundationApi::class)
 @Composable
 fun WearPodApp(viewModel: WearPodViewModel) {
+    val isLoaded by viewModel.isLoaded.collectAsStateWithLifecycle()
+    if (!isLoaded) {
+        // Library is still loading from disk; avoid flashing the empty-state screens.
+        WatchViewport {}
+        return
+    }
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val player by viewModel.playerState.collectAsStateWithLifecycle()
     val audioOutput by viewModel.audioOutputState.collectAsStateWithLifecycle()

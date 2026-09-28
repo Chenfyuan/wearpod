@@ -8,7 +8,6 @@ import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
 import com.sjtech.wearpod.data.model.Subscription
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -23,12 +22,11 @@ class WearPodStore(context: Context) {
     private val legacyStore = LegacySnapshotFileStore(context)
     private val migrationMutex = Mutex()
 
-    fun read(): AppSnapshot = runBlocking {
+    suspend fun read(): AppSnapshot =
         withContext(Dispatchers.IO) {
             ensureMigrated()
             readSnapshot()
         }
-    }
 
     /**
      * Persists [updated], writing only the rows and preferences that differ from [previous].

@@ -16,6 +16,7 @@ class EpisodeDownloadScheduler(
     private val workManager = WorkManager.getInstance(appContext)
 
     suspend fun enqueueEpisode(episode: Episode) {
+        repository.awaitLoaded()
         val wifiOnly = repository.snapshot.value.downloadSettings.wifiOnly
         repository.markEpisodeQueued(episode.id)
         val request = OneTimeWorkRequestBuilder<EpisodeDownloadWorker>()
