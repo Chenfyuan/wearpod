@@ -231,4 +231,7 @@
     <string name="relative_days_ago">%1$d d ago</string>
 
     <string name="request_failed_http">Request failed, HTTP %1$d</string>
+    <string name="download_notification_channel">Episode downloads</string>
+    <string name="download_notification_title">Downloading %1$s</string>
+    <string name="download_notification_fallback_title">Downloading episode</string>
 </resources>

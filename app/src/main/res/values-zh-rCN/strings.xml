@@ -231,4 +231,7 @@
     <string name="relative_days_ago">%1$d 天前</string>
 
     <string name="request_failed_http">请求失败，HTTP %1$d</string>
+    <string name="download_notification_channel">单集下载</string>
+    <string name="download_notification_title">正在下载：%1$s</string>
+    <string name="download_notification_fallback_title">正在下载单集</string>
 </resources>
