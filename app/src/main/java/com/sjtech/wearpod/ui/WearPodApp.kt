@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -86,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.foundation.BasicSwipeToDismissBox
 import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
+import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
 import com.sjtech.wearpod.BuildConfig
 import com.sjtech.wearpod.R
@@ -106,6 +106,7 @@ import com.sjtech.wearpod.ui.components.QrCodeMatrix
 import com.sjtech.wearpod.ui.components.SectionTitle
 import com.sjtech.wearpod.ui.components.WatchChip
 import com.sjtech.wearpod.ui.components.WatchCompactChip
+import com.sjtech.wearpod.ui.components.WatchLazyColumn
 import com.sjtech.wearpod.ui.components.WatchMetricPill
 import com.sjtech.wearpod.ui.components.WearPullRefreshIndicator
 import com.sjtech.wearpod.ui.components.WatchTimeHeader
@@ -180,13 +181,20 @@ fun WearPodApp(viewModel: WearPodViewModel) {
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                 ) { page ->
-                    RootScreenContent(
-                        screen = ROOT_SCREENS[page],
-                        snapshot = snapshot,
-                        player = player,
-                        audioOutput = audioOutput,
-                        viewModel = viewModel,
-                    )
+                    // Only the settled page may take rotary (crown) focus.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hierarchicalFocusGroup(active = page == pagerState.currentPage),
+                    ) {
+                        RootScreenContent(
+                            screen = ROOT_SCREENS[page],
+                            snapshot = snapshot,
+                            player = player,
+                            audioOutput = audioOutput,
+                            viewModel = viewModel,
+                        )
+                    }
                 }
 
                 PageDots(
@@ -210,15 +218,22 @@ fun WearPodApp(viewModel: WearPodViewModel) {
             ) { isBackground ->
                 val targetScreen = if (isBackground) previousScreen else screen
                 if (targetScreen != null) {
-                    ScreenContent(
-                        screen = targetScreen,
-                        snapshot = snapshot,
-                        player = player,
-                        audioOutput = audioOutput,
-                        volume = volume,
-                        viewModel = viewModel,
-                        showNavigation = !isBackground,
-                    )
+                    // The background screen shown during a swipe must not take rotary (crown) focus.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hierarchicalFocusGroup(active = !isBackground),
+                    ) {
+                        ScreenContent(
+                            screen = targetScreen,
+                            snapshot = snapshot,
+                            player = player,
+                            audioOutput = audioOutput,
+                            volume = volume,
+                            viewModel = viewModel,
+                            showNavigation = !isBackground,
+                        )
+                    }
                 }
             }
         }
@@ -523,7 +538,7 @@ private fun HomeScreen(
         else -> stringResource(R.string.home_scan_import_subtitle)
     }
 
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
@@ -769,7 +784,7 @@ private fun SubscriptionsScreen(
 ) {
     val failedSubscriptions = snapshot.subscriptions.filter { !it.lastRefreshError.isNullOrBlank() }
     val subscriptionsTitle = stringResource(R.string.subscriptions_title)
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
@@ -1038,7 +1053,7 @@ private fun PhoneImportScreen(
             ?.toInt()
     }
 
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp),
@@ -1306,7 +1321,7 @@ private fun PhoneExportScreen(
     val isExpired = state.stage == PhoneExportStage.READY &&
         state.expiresAtEpochMillis?.let { it <= nowMillis } == true
 
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp),
@@ -1495,7 +1510,7 @@ private fun PodcastDetailScreen(
             )
         },
     ) {
-        LazyColumn(
+        WatchLazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 22.dp),
@@ -1882,7 +1897,7 @@ private fun PlayerScreen(
                     ),
                 ),
         )
-        LazyColumn(
+        WatchLazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -2321,7 +2336,7 @@ private fun DownloadsScreen(
             }
             .sortedWith(compareByDescending<DownloadedSubscriptionGroup> { it.episodeCount }.thenBy { it.title.lowercase() })
     }
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
@@ -2656,7 +2671,7 @@ private fun DownloadSettingsScreen(
     onOpenAbout: () -> Unit,
 ) {
     val settings = snapshot.downloadSettings
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
@@ -2909,7 +2924,7 @@ private fun DownloadSettingsScreen(
 
 @Composable
 private fun AboutScreen() {
-    LazyColumn(
+    WatchLazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
