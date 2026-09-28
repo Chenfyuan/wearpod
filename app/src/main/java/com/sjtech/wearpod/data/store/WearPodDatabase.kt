@@ -67,6 +67,15 @@ interface WearPodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavoriteSubscriptions(items: List<FavoriteSubscriptionEntity>)
 
+    @Query("DELETE FROM subscriptions WHERE id IN (:ids)")
+    suspend fun deleteSubscriptions(ids: List<String>)
+
+    @Query("DELETE FROM episodes WHERE id IN (:ids)")
+    suspend fun deleteEpisodes(ids: List<String>)
+
+    @Query("DELETE FROM favorite_subscriptions WHERE subscriptionId IN (:ids)")
+    suspend fun deleteFavoriteSubscriptions(ids: List<String>)
+
     @Query("DELETE FROM subscriptions")
     suspend fun clearSubscriptions()
 

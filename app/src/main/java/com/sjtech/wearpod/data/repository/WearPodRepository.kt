@@ -42,6 +42,10 @@ class WearPodRepository(
     private val mutex = Mutex()
     private val mutableSnapshot = MutableStateFlow(store.read())
 
+    // Last state known to be on disk; writes are diffed against it so a failed write is retried
+    // by the next mutation instead of being silently dropped.
+    private var persistedSnapshot = mutableSnapshot.value
+
     val snapshot: StateFlow<AppSnapshot> = mutableSnapshot.asStateFlow()
 
     suspend fun ensureImportedFeed(rawUrl: String): Subscription? {
@@ -539,7 +543,8 @@ class WearPodRepository(
         mutex.withLock {
             val updated = transform(mutableSnapshot.value)
             mutableSnapshot.value = updated
-            store.write(updated)
+            store.write(persistedSnapshot, updated)
+            persistedSnapshot = updated
         }
     }
 

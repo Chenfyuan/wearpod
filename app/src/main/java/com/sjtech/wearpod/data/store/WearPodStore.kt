@@ -4,11 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.withTransaction
 import com.sjtech.wearpod.data.model.AppSnapshot
-import com.sjtech.wearpod.data.model.DownloadSettings
 import com.sjtech.wearpod.data.model.DownloadState
 import com.sjtech.wearpod.data.model.Episode
-import com.sjtech.wearpod.data.model.PlaybackMemory
-import com.sjtech.wearpod.data.model.SleepTimer
 import com.sjtech.wearpod.data.model.Subscription
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -33,10 +30,15 @@ class WearPodStore(context: Context) {
         }
     }
 
-    suspend fun write(snapshot: AppSnapshot) {
+    /**
+     * Persists [updated], writing only the rows and preferences that differ from [previous].
+     * [previous] must be the state that was last persisted (or read) by this store.
+     */
+    suspend fun write(previous: AppSnapshot, updated: AppSnapshot) {
+        if (previous === updated) return
         withContext(Dispatchers.IO) {
             ensureMigrated()
-            persistSnapshot(snapshot)
+            persistDiff(SnapshotDiff.between(previous, updated), updated)
         }
     }
 
@@ -102,6 +104,29 @@ class WearPodStore(context: Context) {
         )
     }
 
+    private suspend fun persistDiff(diff: SnapshotDiff, updated: AppSnapshot) {
+        if (diff.hasDatabaseChanges) {
+            val dao = database.dao()
+            database.withTransaction {
+                diff.removedFavoriteIds.chunked(SQL_BATCH_SIZE).forEach { dao.deleteFavoriteSubscriptions(it) }
+                diff.deletedEpisodeIds.chunked(SQL_BATCH_SIZE).forEach { dao.deleteEpisodes(it) }
+                diff.deletedSubscriptionIds.chunked(SQL_BATCH_SIZE).forEach { dao.deleteSubscriptions(it) }
+                if (diff.upsertedSubscriptions.isNotEmpty()) {
+                    dao.insertSubscriptions(diff.upsertedSubscriptions.map { it.toEntity() })
+                }
+                if (diff.upsertedEpisodes.isNotEmpty()) {
+                    dao.insertEpisodes(diff.upsertedEpisodes.map { it.toEntity() })
+                }
+                if (diff.addedFavoriteIds.isNotEmpty()) {
+                    dao.insertFavoriteSubscriptions(diff.addedFavoriteIds.map(::FavoriteSubscriptionEntity))
+                }
+            }
+        }
+        if (diff.preferencesChanged) {
+            preferencesStore.write(updated.toPreferencesSnapshot())
+        }
+    }
+
     private suspend fun persistSnapshot(snapshot: AppSnapshot) {
         val dao = database.dao()
         database.withTransaction {
@@ -110,46 +135,11 @@ class WearPodStore(context: Context) {
             dao.clearSubscriptions()
 
             if (snapshot.subscriptions.isNotEmpty()) {
-                dao.insertSubscriptions(
-                    snapshot.subscriptions.map { subscription ->
-                        SubscriptionEntity(
-                            id = subscription.id,
-                            title = subscription.title,
-                            author = subscription.author,
-                            description = subscription.description,
-                            feedUrl = subscription.feedUrl,
-                            artworkUrl = subscription.artworkUrl,
-                            importedAtEpochMillis = subscription.importedAtEpochMillis,
-                            refreshedAtEpochMillis = subscription.refreshedAtEpochMillis,
-                            lastRefreshError = subscription.lastRefreshError,
-                        )
-                    },
-                )
+                dao.insertSubscriptions(snapshot.subscriptions.map { it.toEntity() })
             }
 
             if (snapshot.episodes.isNotEmpty()) {
-                dao.insertEpisodes(
-                    snapshot.episodes.map { episode ->
-                        EpisodeEntity(
-                            id = episode.id,
-                            subscriptionId = episode.subscriptionId,
-                            guid = episode.guid,
-                            title = episode.title,
-                            description = episode.description,
-                            audioUrl = episode.audioUrl,
-                            artworkUrl = episode.artworkUrl,
-                            publishedAtEpochMillis = episode.publishedAtEpochMillis,
-                            durationSeconds = episode.durationSeconds,
-                            sizeBytes = episode.sizeBytes,
-                            downloadState = episode.downloadState.name,
-                            downloadedFilePath = episode.downloadedFilePath,
-                            downloadedBytes = episode.downloadedBytes,
-                            lastPlayedPositionMs = episode.lastPlayedPositionMs,
-                            lastPlayedAtEpochMillis = episode.lastPlayedAtEpochMillis,
-                            isCompleted = episode.isCompleted,
-                        )
-                    },
-                )
+                dao.insertEpisodes(snapshot.episodes.map { it.toEntity() })
             }
 
             if (snapshot.favoriteSubscriptionIds.isNotEmpty()) {
@@ -159,16 +149,49 @@ class WearPodStore(context: Context) {
             }
         }
 
-        preferencesStore.write(
-            WearPodPreferencesSnapshot(
-                playbackMemory = snapshot.playbackMemory,
-                hasCompletedAudioOutputSetup = snapshot.hasCompletedAudioOutputSetup,
-                downloadSettings = snapshot.downloadSettings,
-                sleepTimer = snapshot.sleepTimer,
-            ),
-        )
+        preferencesStore.write(snapshot.toPreferencesSnapshot())
     }
 }
+
+private const val SQL_BATCH_SIZE = 500
+
+private fun AppSnapshot.toPreferencesSnapshot() = WearPodPreferencesSnapshot(
+    playbackMemory = playbackMemory,
+    hasCompletedAudioOutputSetup = hasCompletedAudioOutputSetup,
+    downloadSettings = downloadSettings,
+    sleepTimer = sleepTimer,
+)
+
+private fun Subscription.toEntity() = SubscriptionEntity(
+    id = id,
+    title = title,
+    author = author,
+    description = description,
+    feedUrl = feedUrl,
+    artworkUrl = artworkUrl,
+    importedAtEpochMillis = importedAtEpochMillis,
+    refreshedAtEpochMillis = refreshedAtEpochMillis,
+    lastRefreshError = lastRefreshError,
+)
+
+private fun Episode.toEntity() = EpisodeEntity(
+    id = id,
+    subscriptionId = subscriptionId,
+    guid = guid,
+    title = title,
+    description = description,
+    audioUrl = audioUrl,
+    artworkUrl = artworkUrl,
+    publishedAtEpochMillis = publishedAtEpochMillis,
+    durationSeconds = durationSeconds,
+    sizeBytes = sizeBytes,
+    downloadState = downloadState.name,
+    downloadedFilePath = downloadedFilePath,
+    downloadedBytes = downloadedBytes,
+    lastPlayedPositionMs = lastPlayedPositionMs,
+    lastPlayedAtEpochMillis = lastPlayedAtEpochMillis,
+    isCompleted = isCompleted,
+)
 
 private fun String.toDownloadState(): DownloadState =
     runCatching { DownloadState.valueOf(this) }.getOrDefault(DownloadState.NOT_DOWNLOADED)
