@@ -143,6 +143,7 @@ class WearPodViewModel(
     val snapshot = repository.snapshot
     val isLoaded = repository.isLoaded
     val playerState = playerGateway.playerState
+    val playerPositionMs = playerGateway.positionMs
     val audioOutputState = audioOutputController.state
     val volumeState = volumeController.state
     val isOnline = networkStatusMonitor.isOnline

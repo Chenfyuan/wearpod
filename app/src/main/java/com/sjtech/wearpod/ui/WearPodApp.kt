@@ -124,6 +124,7 @@ import com.sjtech.wearpod.util.formatDurationShort
 import com.sjtech.wearpod.util.formatRelativeTime
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val ROOT_SCREENS = listOf(
@@ -236,6 +237,7 @@ private fun RootScreenContent(
         WearPodScreen.Home -> HomeScreen(
             snapshot = snapshot,
             player = player,
+            playerPositionMs = viewModel.playerPositionMs,
             audioOutput = audioOutput,
             onContinue = viewModel::playContinueEpisode,
             onTogglePlayback = viewModel::togglePlayPause,
@@ -327,13 +329,18 @@ private fun ScreenContent(
 
         is WearPodScreen.PodcastDetail -> {
             val subscription = snapshot.subscriptions.firstOrNull { it.id == screen.subscriptionId }
-            val episodes = snapshot.episodes
-                .filter { it.subscriptionId == screen.subscriptionId }
-                .sortedByDescending { it.publishedAtEpochMillis ?: 0L }
-            val filteredEpisodes = when (viewModel.episodeFilter) {
-                EpisodeFilter.ALL -> episodes
-                EpisodeFilter.UNPLAYED -> episodes.filter { !it.isCompleted }
-                EpisodeFilter.DOWNLOADED -> episodes.filter { it.downloadState == DownloadState.DOWNLOADED }
+            val episodes = remember(snapshot.episodes, screen.subscriptionId) {
+                snapshot.episodes
+                    .filter { it.subscriptionId == screen.subscriptionId }
+                    .sortedByDescending { it.publishedAtEpochMillis ?: 0L }
+            }
+            val episodeFilter = viewModel.episodeFilter
+            val filteredEpisodes = remember(episodes, episodeFilter) {
+                when (episodeFilter) {
+                    EpisodeFilter.ALL -> episodes
+                    EpisodeFilter.UNPLAYED -> episodes.filter { !it.isCompleted }
+                    EpisodeFilter.DOWNLOADED -> episodes.filter { it.downloadState == DownloadState.DOWNLOADED }
+                }
             }
             if (subscription != null) {
                 PodcastDetailScreen(
@@ -362,7 +369,7 @@ private fun ScreenContent(
             playerSubtitle = player.subtitle,
             playerArtworkUrl = player.artworkUrl,
             audioOutput = audioOutput,
-            playerPositionMs = player.positionMs,
+            playerPositionMs = viewModel.playerPositionMs,
             playerDurationMs = player.durationMs,
             playerSpeed = player.speed,
             isPlaying = player.isPlaying,
@@ -463,6 +470,7 @@ private fun RootScreenHeader(
 private fun HomeScreen(
     snapshot: com.sjtech.wearpod.data.model.AppSnapshot,
     player: PlayerSnapshot,
+    playerPositionMs: StateFlow<Long>,
     audioOutput: AudioOutputSnapshot,
     onContinue: () -> Unit,
     onTogglePlayback: () -> Unit,
@@ -471,20 +479,26 @@ private fun HomeScreen(
     onOpenSubscription: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val favoriteSubscriptions = snapshot.subscriptions
-        .filter { subscription -> snapshot.favoriteSubscriptionIds.contains(subscription.id) }
-        .sortedByDescending { subscription ->
-            snapshot.episodes
-                .filter { it.subscriptionId == subscription.id }
-                .maxOfOrNull { it.publishedAtEpochMillis ?: 0L } ?: 0L
-        }
-        .take(3)
+    val positionMs by playerPositionMs.collectAsStateWithLifecycle()
+    val favoriteSubscriptions = remember(snapshot.subscriptions, snapshot.episodes, snapshot.favoriteSubscriptionIds) {
+        val latestPublishedBySubscription = snapshot.episodes
+            .groupBy { it.subscriptionId }
+            .mapValues { (_, episodes) -> episodes.maxOfOrNull { it.publishedAtEpochMillis ?: 0L } ?: 0L }
+        snapshot.subscriptions
+            .filter { subscription -> snapshot.favoriteSubscriptionIds.contains(subscription.id) }
+            .sortedByDescending { subscription -> latestPublishedBySubscription[subscription.id] ?: 0L }
+            .take(3)
+    }
 
-    val continueEpisode = snapshot.playbackMemory.lastEpisodeId?.let { id ->
-        snapshot.episodes.firstOrNull { it.id == id }
-    } ?: snapshot.episodes.maxByOrNull { it.lastPlayedAtEpochMillis ?: 0L }
-    val activeEpisode = player.episodeId?.let { episodeId ->
-        snapshot.episodes.firstOrNull { it.id == episodeId }
+    val continueEpisode = remember(snapshot.episodes, snapshot.playbackMemory.lastEpisodeId) {
+        snapshot.playbackMemory.lastEpisodeId?.let { id ->
+            snapshot.episodes.firstOrNull { it.id == id }
+        } ?: snapshot.episodes.maxByOrNull { it.lastPlayedAtEpochMillis ?: 0L }
+    }
+    val activeEpisode = remember(snapshot.episodes, player.episodeId) {
+        player.episodeId?.let { episodeId ->
+            snapshot.episodes.firstOrNull { it.id == episodeId }
+        }
     }
     val cardTitle = when {
         player.hasMedia && player.title.isNotBlank() -> player.title
@@ -500,7 +514,7 @@ private fun HomeScreen(
     }
     val cardSubtitle = when {
         player.hasMedia && player.durationMs > 0 -> {
-            "${formatDurationShort((player.positionMs / 1000L).toInt())} / ${formatDurationShort((player.durationMs / 1000L).toInt())}"
+            "${formatDurationShort((positionMs / 1000L).toInt())} / ${formatDurationShort((player.durationMs / 1000L).toInt())}"
         }
         player.hasMedia && player.subtitle.isNotBlank() -> player.subtitle
         continueEpisode != null -> {
@@ -1784,7 +1798,7 @@ private fun PlayerScreen(
     playerSubtitle: String,
     playerArtworkUrl: String?,
     audioOutput: AudioOutputSnapshot,
-    playerPositionMs: Long,
+    playerPositionMs: StateFlow<Long>,
     playerDurationMs: Long,
     playerSpeed: Float,
     isPlaying: Boolean,
@@ -1809,14 +1823,15 @@ private fun PlayerScreen(
     showNavigation: Boolean,
 ) {
     val context = LocalContext.current
-    val progress = if (playerDurationMs > 0) playerPositionMs / playerDurationMs.toFloat() else 0f
+    val positionMs by playerPositionMs.collectAsStateWithLifecycle()
+    val progress = if (playerDurationMs > 0) positionMs / playerDurationMs.toFloat() else 0f
     val currentTitle = playerTitle.ifBlank {
         snapshot.playbackMemory.lastEpisodeId
             ?.let { id -> snapshot.episodes.firstOrNull { it.id == id }?.title }
             ?: stringResource(R.string.player_choose_episode)
     }
     val progressLabel = if (playerDurationMs > 0) {
-        "${formatDurationShort((playerPositionMs / 1000L).toInt())} / ${formatDurationShort((playerDurationMs / 1000L).toInt())}"
+        "${formatDurationShort((positionMs / 1000L).toInt())} / ${formatDurationShort((playerDurationMs / 1000L).toInt())}"
     } else {
         stringResource(R.string.player_ready)
     }
@@ -2262,39 +2277,50 @@ private fun DownloadsScreen(
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
-    val queuedEpisodes = snapshot.episodes
-        .filter { episode ->
-            episode.downloadState == DownloadState.QUEUED || episode.downloadState == DownloadState.DOWNLOADING
-        }
-        .sortedWith(
-            compareByDescending<Episode> { it.downloadState == DownloadState.DOWNLOADING }
-                .thenByDescending { it.publishedAtEpochMillis ?: 0L },
-        )
-    val downloadedEpisodes = snapshot.episodes.filter { it.downloadState == DownloadState.DOWNLOADED }
-    val completedDownloadedEpisodes = downloadedEpisodes.filter { it.isCompleted }
-    val failedEpisodes = snapshot.episodes
-        .filter { it.downloadState == DownloadState.FAILED }
-        .sortedByDescending { it.publishedAtEpochMillis ?: 0L }
-    val usedBytes = downloadedEpisodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L }
-    val availableBytes = context.filesDir.usableSpace.coerceAtLeast(0L)
+    val queuedEpisodes = remember(snapshot.episodes) {
+        snapshot.episodes
+            .filter { episode ->
+                episode.downloadState == DownloadState.QUEUED || episode.downloadState == DownloadState.DOWNLOADING
+            }
+            .sortedWith(
+                compareByDescending<Episode> { it.downloadState == DownloadState.DOWNLOADING }
+                    .thenByDescending { it.publishedAtEpochMillis ?: 0L },
+            )
+    }
+    val downloadedEpisodes = remember(snapshot.episodes) {
+        snapshot.episodes.filter { it.downloadState == DownloadState.DOWNLOADED }
+    }
+    val completedDownloadedEpisodes = remember(downloadedEpisodes) { downloadedEpisodes.filter { it.isCompleted } }
+    val failedEpisodes = remember(snapshot.episodes) {
+        snapshot.episodes
+            .filter { it.downloadState == DownloadState.FAILED }
+            .sortedByDescending { it.publishedAtEpochMillis ?: 0L }
+    }
+    val usedBytes = remember(downloadedEpisodes) {
+        downloadedEpisodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L }
+    }
+    // Filesystem stat; only re-query when the set of downloads changes.
+    val availableBytes = remember(downloadedEpisodes) { context.filesDir.usableSpace.coerceAtLeast(0L) }
     val maxBytes = 1_500L * 1024L * 1024L
     val storageWarning = when {
         availableBytes < 256L * 1024L * 1024L -> stringResource(R.string.storage_low_warning)
         usedBytes >= (maxBytes * 0.85f).toLong() -> stringResource(R.string.storage_heavy_warning)
         else -> null
     }
-    val downloadedGroups = downloadedEpisodes
-        .groupBy { it.subscriptionId }
-        .mapNotNull { (subscriptionId, episodes) ->
-            val subscription = snapshot.subscriptions.firstOrNull { it.id == subscriptionId } ?: return@mapNotNull null
-            DownloadedSubscriptionGroup(
-                subscriptionId = subscriptionId,
-                title = subscription.title,
-                episodeCount = episodes.size,
-                totalBytes = episodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L },
-            )
-        }
-        .sortedWith(compareByDescending<DownloadedSubscriptionGroup> { it.episodeCount }.thenBy { it.title.lowercase() })
+    val downloadedGroups = remember(downloadedEpisodes, snapshot.subscriptions) {
+        downloadedEpisodes
+            .groupBy { it.subscriptionId }
+            .mapNotNull { (subscriptionId, episodes) ->
+                val subscription = snapshot.subscriptions.firstOrNull { it.id == subscriptionId } ?: return@mapNotNull null
+                DownloadedSubscriptionGroup(
+                    subscriptionId = subscriptionId,
+                    title = subscription.title,
+                    episodeCount = episodes.size,
+                    totalBytes = episodes.sumOf { it.downloadedBytes.takeIf { size -> size > 0 } ?: 0L },
+                )
+            }
+            .sortedWith(compareByDescending<DownloadedSubscriptionGroup> { it.episodeCount }.thenBy { it.title.lowercase() })
+    }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()

@@ -30,7 +30,6 @@ data class PlayerSnapshot(
     val subtitle: String = "",
     val artworkUrl: String? = null,
     val isPlaying: Boolean = false,
-    val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val speed: Float = 1.0f,
     val hasMedia: Boolean = false,
@@ -58,8 +57,18 @@ class PlayerGateway(
     private var lastPersistedEpisodeId: String? = null
     private var lastPersistedPositionMs = -1L
     private var sleepTimerJob: Job? = null
+    private var progressJob: Job? = null
+    private val mutablePositionMs = MutableStateFlow(0L)
+    private var cachedQueue: List<PlayerQueueItemSnapshot> = emptyList()
 
+    /** Player state that changes only on discrete events (track, play/pause, queue, speed). */
     val playerState: StateFlow<PlayerSnapshot> = mutablePlayerState.asStateFlow()
+
+    /**
+     * Current playback position, ticking once per second while playing. Kept separate from
+     * [playerState] so only the screens that show progress recompose every second.
+     */
+    val positionMs: StateFlow<Long> = mutablePositionMs.asStateFlow()
 
     init {
         val sessionToken = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
@@ -70,12 +79,24 @@ class PlayerGateway(
                 controller.addListener(
                     object : Player.Listener {
                         override fun onEvents(player: Player, events: Player.Events) {
+                            if (events.containsAny(
+                                    Player.EVENT_TIMELINE_CHANGED,
+                                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                                    Player.EVENT_MEDIA_METADATA_CHANGED,
+                                )
+                            ) {
+                                cachedQueue = buildQueue(controller)
+                            }
                             updatePlayerSnapshot(controller)
+                            persistPlayback(controller)
+                            syncProgressTicker(controller)
                         }
                     },
                 )
                 controllerDeferred.complete(controller)
+                cachedQueue = buildQueue(controller)
                 updatePlayerSnapshot(controller)
+                syncProgressTicker(controller)
             },
             appContext.mainExecutor,
         )
@@ -85,14 +106,6 @@ class PlayerGateway(
             val controller = controllerDeferred.await()
             controller.setPlaybackParameters(PlaybackParameters(repository.snapshot.value.playbackMemory.speed))
             updatePlayerSnapshot(controller)
-        }
-        appScope.launch {
-            while (isActive) {
-                val controller = controllerDeferred.await()
-                updatePlayerSnapshot(controller)
-                persistPlayback(controller)
-                delay(1_000L)
-            }
         }
     }
 
@@ -209,9 +222,25 @@ class PlayerGateway(
         }
     }
 
-    private fun updatePlayerSnapshot(controller: MediaController) {
-        val metadata = controller.mediaMetadata
-        val queue = buildList {
+    /** Ticks [positionMs] and saves progress while playing; idle while paused or stopped. */
+    private fun syncProgressTicker(controller: MediaController) {
+        if (!controller.isPlaying) {
+            progressJob?.cancel()
+            progressJob = null
+            return
+        }
+        if (progressJob?.isActive == true) return
+        progressJob = appScope.launch {
+            while (isActive) {
+                mutablePositionMs.value = controller.currentPosition.coerceAtLeast(0L)
+                persistPlayback(controller)
+                delay(1_000L)
+            }
+        }
+    }
+
+    private fun buildQueue(controller: MediaController): List<PlayerQueueItemSnapshot> =
+        buildList {
             repeat(controller.mediaItemCount) { index ->
                 val item = controller.getMediaItemAt(index)
                 add(
@@ -224,17 +253,20 @@ class PlayerGateway(
                 )
             }
         }
+
+    private fun updatePlayerSnapshot(controller: MediaController) {
+        val metadata = controller.mediaMetadata
+        mutablePositionMs.value = controller.currentPosition.coerceAtLeast(0L)
         mutablePlayerState.value = PlayerSnapshot(
             episodeId = controller.currentMediaItem?.mediaId,
             title = metadata.title?.toString().orEmpty(),
             subtitle = metadata.artist?.toString().orEmpty(),
             artworkUrl = metadata.artworkUri?.toString(),
             isPlaying = controller.isPlaying,
-            positionMs = controller.currentPosition.coerceAtLeast(0L),
             durationMs = controller.duration.takeIf { it > 0 } ?: 0L,
             speed = controller.playbackParameters.speed,
             hasMedia = controller.currentMediaItem != null,
-            queue = queue,
+            queue = cachedQueue,
             currentQueueIndex = controller.currentMediaItemIndex,
             hasPrevious = controller.hasPreviousMediaItem(),
             hasNext = controller.hasNextMediaItem(),
