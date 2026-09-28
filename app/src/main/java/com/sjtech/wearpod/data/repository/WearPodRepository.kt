@@ -1,6 +1,7 @@
 package com.sjtech.wearpod.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.sjtech.wearpod.R
 import com.sjtech.wearpod.data.model.AppSnapshot
 import com.sjtech.wearpod.data.model.DownloadSettings
@@ -23,16 +24,22 @@ import com.sjtech.wearpod.data.rss.PodcastFeedParser
 import com.sjtech.wearpod.data.store.WearPodStore
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 class WearPodRepository(
@@ -182,16 +189,43 @@ class WearPodRepository(
                 networkClient.openStream(subscription.feedUrl).use { parser.parse(subscription.feedUrl, it) }
             }
             upsertFeed(subscription.feedUrl, parsedFeed, preferredSubscriptionId = subscriptionId)
+        } catch (cancellation: CancellationException) {
+            // Cancelled (e.g. the worker was stopped), not a feed error: don't mark it as failed.
+            throw cancellation
         } catch (throwable: Throwable) {
             markSubscriptionRefreshFailed(subscriptionId, throwable.message ?: appContext.getString(R.string.refresh_failed))
             throw throwable
         }
     }
 
-    suspend fun refreshAllSubscriptions() {
+    /**
+     * Refreshes every subscription, a few at a time. Individual failures are recorded on the
+     * subscription ([Subscription.lastRefreshError]) and logged rather than aborting the batch.
+     *
+     * @return the number of subscriptions that failed to refresh.
+     */
+    suspend fun refreshAllSubscriptions(): Int {
         awaitLoaded()
-        mutableSnapshot.value.subscriptions.forEach { subscription ->
-            runCatching { refreshSubscription(subscription.id) }
+        val semaphore = Semaphore(REFRESH_CONCURRENCY)
+        return coroutineScope {
+            mutableSnapshot.value.subscriptions
+                .map { subscription ->
+                    async {
+                        semaphore.withPermit {
+                            try {
+                                refreshSubscription(subscription.id)
+                                false
+                            } catch (cancellation: CancellationException) {
+                                throw cancellation
+                            } catch (throwable: Throwable) {
+                                Log.w(TAG, "Refreshing ${subscription.feedUrl} failed", throwable)
+                                true
+                            }
+                        }
+                    }
+                }
+                .awaitAll()
+                .count { failed -> failed }
         }
     }
 
@@ -643,6 +677,12 @@ class WearPodRepository(
         )
     }
 }
+
+private const val TAG = "WearPodRepository"
+
+// Feeds are small but slow to fetch over a watch's connection; a few in parallel is a good balance
+// between total refresh time and memory/radio use.
+private const val REFRESH_CONCURRENCY = 3
 
 private val EMPTY_SNAPSHOT = AppSnapshot(
     subscriptions = emptyList(),

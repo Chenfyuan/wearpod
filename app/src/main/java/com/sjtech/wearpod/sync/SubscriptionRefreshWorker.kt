@@ -1,9 +1,11 @@
 package com.sjtech.wearpod.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.sjtech.wearpod.WearPodApplication
+import kotlinx.coroutines.CancellationException
 
 class SubscriptionRefreshWorker(
     appContext: Context,
@@ -16,7 +18,10 @@ class SubscriptionRefreshWorker(
         val downloadScheduler = appContainer.downloadScheduler
 
         return try {
-            repository.refreshAllSubscriptions()
+            val failedCount = repository.refreshAllSubscriptions()
+            if (failedCount > 0) {
+                Log.w(TAG, "$failedCount subscription(s) failed to refresh")
+            }
             repository.snapshot.value.subscriptions.forEach { subscription ->
                 val candidates = repository.autoDownloadCandidates(subscription.id)
                 if (candidates.isNotEmpty()) {
@@ -24,8 +29,13 @@ class SubscriptionRefreshWorker(
                 }
             }
             Result.success()
-        } catch (_: Exception) {
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (exception: Exception) {
+            Log.e(TAG, "Background refresh failed", exception)
             Result.retry()
         }
     }
 }
+
+private const val TAG = "SubscriptionRefreshWorker"
