@@ -7,9 +7,12 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaRoute2Info
 import android.media.MediaRouter2
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
+import androidx.annotation.RequiresApi
 import com.sjtech.wearpod.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,9 +85,10 @@ class AudioOutputController(
     }
 
     fun showSystemOutputSwitcher() {
-        val shown = runCatching {
-            mediaRouter.showSystemOutputSwitcher()
-        }.getOrDefault(false)
+        val shown = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            runCatching { mediaRouter.showSystemOutputSwitcher() }
+                .onFailure { Log.w(TAG, "System output switcher unavailable", it) }
+                .getOrDefault(false)
 
         if (!shown) {
             val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
@@ -95,14 +99,17 @@ class AudioOutputController(
     }
 
     private fun readSnapshot(): AudioOutputSnapshot {
-        val selectedRoute = mediaRouter
-            .systemController
-            ?.selectedRoutes
-            ?.sortedByDescending(::routePriority)
-            ?.firstOrNull()
+        // MediaRoute2Info.getType() is API 34+; older watches fall back to AudioManager devices.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val selectedRoute = mediaRouter
+                .systemController
+                .selectedRoutes
+                .sortedByDescending(::routePriority)
+                .firstOrNull()
 
-        if (selectedRoute != null) {
-            return selectedRoute.toSnapshot()
+            if (selectedRoute != null) {
+                return selectedRoute.toSnapshot()
+            }
         }
 
         return audioManager
@@ -113,6 +120,7 @@ class AudioOutputController(
             ?: AudioOutputSnapshot(label = appContext.getString(R.string.audio_output_watch_speaker))
     }
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun MediaRoute2Info.toSnapshot(): AudioOutputSnapshot {
         val routeName = name?.toString()?.trim().orEmpty()
         return when (type) {
@@ -209,6 +217,7 @@ class AudioOutputController(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 private fun routePriority(route: MediaRoute2Info): Int = when (route.type) {
     MediaRoute2Info.TYPE_BLUETOOTH_A2DP,
     MediaRoute2Info.TYPE_BLE_HEADSET,
@@ -265,3 +274,5 @@ private fun devicePriority(device: AudioDeviceInfo): Int = when (device.type) {
     AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> 10
     else -> 0
 }
+
+private const val TAG = "AudioOutputController"

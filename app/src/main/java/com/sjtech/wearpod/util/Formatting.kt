@@ -2,7 +2,6 @@ package com.sjtech.wearpod.util
 
 import android.content.Context
 import com.sjtech.wearpod.R
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -13,14 +12,14 @@ private fun dayFormatter(): DateTimeFormatter =
     DateTimeFormatter.ofPattern("MM/dd", Locale.getDefault()).withZone(ZoneId.systemDefault())
 
 fun formatDurationShort(seconds: Int?): String {
-    val safe = seconds ?: return "--"
-    val duration = Duration.ofSeconds(safe.toLong())
-    val hours = duration.toHours()
-    val minutes = duration.toMinutesPart()
-    val secs = duration.toSecondsPart()
+    val safe = (seconds ?: return "--").coerceAtLeast(0)
+    // Plain arithmetic: Duration.toMinutesPart()/toSecondsPart() need API 31 but minSdk is 30.
+    val hours = safe / 3_600
+    val minutes = safe % 3_600 / 60
+    val secs = safe % 60
     return when {
         hours > 0 -> "%d:%02d:%02d".format(hours, minutes, secs)
-        else -> "%d:%02d".format(duration.toMinutes(), secs)
+        else -> "%d:%02d".format(safe / 60, secs)
     }
 }
 
