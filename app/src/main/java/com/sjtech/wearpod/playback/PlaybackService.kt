@@ -13,7 +13,7 @@ import androidx.media3.session.MediaSessionService
 import com.sjtech.wearpod.BuildConfig
 import com.sjtech.wearpod.MainActivity
 
-// setSuppressPlaybackOnUnsuitableOutput is @UnstableApi in Media3.
+// setSuppressPlaybackOnUnsuitableOutput and setMediaNotificationProvider are @UnstableApi in Media3.
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var player: ExoPlayer? = null
@@ -41,6 +41,7 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        setMediaNotificationProvider(OngoingMediaNotificationProvider(this))
         player = exoPlayer
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setSessionActivity(pendingIntent)
